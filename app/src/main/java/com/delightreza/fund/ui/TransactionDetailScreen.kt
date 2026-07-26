@@ -153,7 +153,7 @@ fun TransactionDetailScreen(
             title = { Text(if (groupTransactions.isNotEmpty()) "Group Details" else "Transaction Details") },
             navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Back") } },
             actions = {
-                if (!isDeleting && targetEditId != null) {
+                if (hasToken && !isDeleting && targetEditId != null) {
                     IconButton(onClick = { navController.navigate("add_transaction?txId=$targetEditId") }) {
                         Icon(Icons.Default.Edit, "Edit Transaction")
                     }

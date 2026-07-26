@@ -38,7 +38,11 @@ import com.delightreza.fund.data.Transaction
 import com.delightreza.fund.utils.DateUtils
 import com.delightreza.fund.utils.FormatUtils
 import kotlin.math.abs
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     modifier: Modifier = Modifier,
@@ -73,12 +77,21 @@ fun ProfileScreen(
     }
 
     LaunchedEffect(Unit) {
-        config = repository.fetchRemoteConfig() ?: repository.getAppConfig()
+        // Load cached data first
+        config = repository.getAppConfig()
         val cached = repository.getCachedData()
         if (cached != null) { data = cached; balances = repository.calculateBalances(cached) }
+        
+        // Then fetch remote data
+        val remoteConfig = repository.fetchRemoteConfig()
+        if (remoteConfig != null) {
+            config = remoteConfig
+        }
         val result = repository.fetchData()
-        config = repository.getAppConfig()
-        if (result != null) { data = result; balances = repository.calculateBalances(result) }
+        if (result != null) { 
+            data = result
+            balances = repository.calculateBalances(result) 
+        }
     }
 
     var hasRestoredScroll by remember { mutableStateOf(false) }
@@ -89,9 +102,24 @@ fun ProfileScreen(
         }
     }
 
+    val ptrState = rememberPullToRefreshState()
+    if (ptrState.isRefreshing) {
+        LaunchedEffect(true) {
+            val remoteConfig = repository.fetchRemoteConfig()
+            if (remoteConfig != null) config = remoteConfig
+            val result = repository.fetchData()
+            if (result != null) { 
+                data = result
+                balances = repository.calculateBalances(result) 
+            }
+            ptrState.endRefresh()
+        }
+    }
+
     val currentUserName = config?.members?.find { it.id == currentUser }?.name ?: currentUser
 
-    LazyColumn(state = listState, modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Box(modifier = modifier.fillMaxSize().nestedScroll(ptrState.nestedScrollConnection)) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
             val netBalance = balances[currentUser] ?: 0.0
             val given = data?.transactions?.filter { it.type == "credit" && (it.payerId == currentUser || it.whoOrBill == currentUser) }?.sumOf { it.amount } ?: 0.0
@@ -166,6 +194,8 @@ fun ProfileScreen(
             }
         }
         item { Spacer(modifier = Modifier.height(20.dp)) }
+    }
+    PullToRefreshContainer(state = ptrState, modifier = Modifier.align(Alignment.TopCenter))
     }
 
     if (showTokenDialog) {

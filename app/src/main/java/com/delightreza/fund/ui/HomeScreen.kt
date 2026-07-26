@@ -34,6 +34,9 @@ import com.delightreza.fund.utils.DateUtils
 import com.delightreza.fund.utils.FormatUtils
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,8 +87,16 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) { loadData(forceNetwork = false) }
 
+    val ptrState = rememberPullToRefreshState()
+    if (ptrState.isRefreshing) {
+        LaunchedEffect(true) {
+            loadData(forceNetwork = true)
+            ptrState.endRefresh()
+        }
+    }
+
     Scaffold(modifier = modifier) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+        Box(modifier = Modifier.padding(padding).fillMaxSize().nestedScroll(ptrState.nestedScrollConnection)) {
             if (data == null && isInitialLoad) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             } else if (data != null && config != null) {
@@ -276,6 +287,7 @@ fun HomeScreen(
                     }
                 }
             }
+            PullToRefreshContainer(state = ptrState, modifier = Modifier.align(Alignment.TopCenter))
         }
     }
 }
