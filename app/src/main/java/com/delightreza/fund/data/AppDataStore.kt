@@ -28,12 +28,7 @@ class AppDataStore(private val context: Context) {
         if (!stored.isNullOrBlank()) {
             stored
         } else {
-            val envToken = com.delightreza.fund.BuildConfig.GITHUB_TOKEN
-            if (envToken.isNotBlank() && envToken != "YOUR_GITHUB_TOKEN" && envToken != "null") {
-                envToken
-            } else {
-                null
-            }
+            null
         }
     }
     val userFlow: Flow<String?> = context.dataStore.data.map { it[SELECTED_USER] }
