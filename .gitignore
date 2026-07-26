@@ -1,0 +1,27 @@
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Secrets and environment
+.env
+.env.*
+debug.keystore
+debug.keystore.base64
+release.keystore
+
+# Gradle
+.gradle/
+build/
+app/build/
+gradlew
+gradlew.bat
+
+# Log files
+*.log
