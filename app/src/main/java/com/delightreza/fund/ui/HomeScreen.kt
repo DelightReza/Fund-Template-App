@@ -60,6 +60,7 @@ fun HomeScreen(
     var showFilters by remember { mutableStateOf(false) }
     
     val scope = rememberCoroutineScope()
+    val hasPendingSync by repository.pendingSyncFlow.collectAsState(initial = false)
     
     val context = LocalContext.current
 
@@ -138,9 +139,50 @@ fun HomeScreen(
                 LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
                     item {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text(text = config?.siteTitle ?: "Fund", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        Text(text = config?.siteSubtitle ?: "Expense Tracker", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column {
+                                Text(text = config?.siteTitle ?: "Fund", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Text(text = config?.siteSubtitle ?: "Expense Tracker", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                            }
+                            if (hasPendingSync) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    shape = CircleShape
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Icon(Icons.Default.CloudOff, contentDescription = "Offline Sync Pending", tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(14.dp))
+                                        Text("Offline Sync", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onTertiaryContainer, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (hasPendingSync) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Offline Mode — Auto-Sync Enabled", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                        Text("Changes are displayed instantly & saved locally. Will sync automatically when online.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f))
+                                    }
+                                    TextButton(onClick = { loadData(forceNetwork = true) }) {
+                                        Text("Sync Now", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Dashboard Cards

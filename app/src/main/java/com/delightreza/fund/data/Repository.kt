@@ -18,6 +18,7 @@ import java.lang.reflect.Type
 import java.net.URI
 
 class Repository(private val dataStore: AppDataStore) {
+    val pendingSyncFlow: Flow<Boolean> get() = dataStore.pendingSyncFlow
     private val api: GitHubApi
 
     private fun formatJsonStringLikeWebsite(rawJson: String): String {
@@ -234,10 +235,15 @@ class Repository(private val dataStore: AppDataStore) {
     suspend fun getAppConfig(): AppConfig? = dataStore.getConfigCache()
 
     suspend fun fetchRemoteConfig(customToken: String? = null): AppConfig? = withContext(Dispatchers.IO) {
-        val current = dataStore.getConfigCache() ?: return@withContext null
+        val current = dataStore.getConfigCache()
+        if (dataStore.hasPendingConfigSync()) {
+            return@withContext current
+        }
+
+        if (current == null) return@withContext null
         val owner = current.repoOwner
         val repo = current.repoName
-        if (owner.isBlank() || repo.isBlank()) return@withContext null
+        if (owner.isBlank() || repo.isBlank()) return@withContext current
 
         val token = customToken ?: dataStore.tokenFlow.firstOrNull()
         val authHeader = if (!token.isNullOrBlank()) "token $token" else null
@@ -251,7 +257,7 @@ class Repository(private val dataStore: AppDataStore) {
                 val decoded = String(Base64.decode(file.content, Base64.DEFAULT))
                 fetched = gson.fromJson(decoded, AppConfig::class.java)
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Ignore network error
             }
         }
 
@@ -259,7 +265,7 @@ class Repository(private val dataStore: AppDataStore) {
             try {
                 fetched = api.fetchConfigDynamic("https://raw.githubusercontent.com/$owner/$repo/main/config.json?t=$timestamp")
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Ignore network error
             }
         }
 
@@ -267,7 +273,7 @@ class Repository(private val dataStore: AppDataStore) {
             try {
                 fetched = api.fetchConfigDynamic("https://$owner.github.io/$repo/config.json?t=$timestamp")
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Ignore network error
             }
         }
 
@@ -288,33 +294,126 @@ class Repository(private val dataStore: AppDataStore) {
         newConfig: AppConfig, 
         commitMessage: String = "Update Configuration"
     ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val current = getAppConfig() ?: newConfig
-            val owner = current.repoOwner.ifEmpty { newConfig.repoOwner }
-            val repo = current.repoName.ifEmpty { newConfig.repoName }
-            if (owner.isBlank() || repo.isBlank()) return@withContext false
+        val current = getAppConfig() ?: newConfig
+        val owner = current.repoOwner.ifEmpty { newConfig.repoOwner }
+        val repo = current.repoName.ifEmpty { newConfig.repoName }
+        if (owner.isBlank() || repo.isBlank()) return@withContext false
 
-            val authHeader = "token $token"
-            val fileDetails = api.getFileDetails(authHeader, owner, repo, "config.json")
+        val fullConfig = newConfig.copy(repoOwner = owner, repoName = repo)
+        val jsonToCommit = formatAppConfigJson(fullConfig)
 
-            val fullConfig = newConfig.copy(repoOwner = owner, repoName = repo)
-            val jsonToCommit = formatAppConfigJson(fullConfig)
+        if (token.isNotBlank()) {
+            try {
+                val authHeader = "token $token"
+                val fileDetails = api.getFileDetails(authHeader, owner, repo, "config.json")
 
-            // Deduplicate commit if remote content is already identical
-            val remoteContentDecoded = String(Base64.decode(fileDetails.content.replace("\n", "").replace("\r", ""), Base64.DEFAULT)).trim()
-            if (remoteContentDecoded == jsonToCommit.trim()) {
+                val remoteContentDecoded = String(Base64.decode(fileDetails.content.replace("\n", "").replace("\r", ""), Base64.DEFAULT)).trim()
+                if (remoteContentDecoded == jsonToCommit.trim()) {
+                    dataStore.saveConfigCache(jsonToCommit)
+                    dataStore.setPendingConfigSync(false)
+                    return@withContext true
+                }
+
+                val encodedContent = Base64.encodeToString(jsonToCommit.toByteArray(), Base64.NO_WRAP)
+                val request = UpdateFileRequest(message = commitMessage, content = encodedContent, sha = fileDetails.sha)
+
+                api.updateFile(authHeader, owner, repo, "config.json", request)
                 dataStore.saveConfigCache(jsonToCommit)
+                dataStore.setPendingConfigSync(false)
                 return@withContext true
+            } catch (e: Exception) {
+                // Offline fallback
             }
+        }
 
-            val encodedContent = Base64.encodeToString(jsonToCommit.toByteArray(), Base64.NO_WRAP)
-            val request = UpdateFileRequest(message = commitMessage, content = encodedContent, sha = fileDetails.sha)
+        dataStore.saveConfigCache(jsonToCommit)
+        dataStore.setPendingConfigSync(true)
+        true
+    }
 
-            api.updateFile(authHeader, owner, repo, "config.json", request)
-            
-            dataStore.saveConfigCache(jsonToCommit)
-            true
-        } catch (e: Exception) { e.printStackTrace(); false }
+    suspend fun saveLocalDataAndMarkPending(data: FundData, msg: String? = null) = withContext(Dispatchers.IO) {
+        val config = getAppConfig()
+        if (config != null) {
+            val billTotals = LinkedHashMap<String, Double>()
+            data.billTypes.keys.forEach { billTotals[it] = 0.0 }
+            config.billTypes.forEach { bt -> if (!billTotals.containsKey(bt.id)) billTotals[bt.id] = 0.0 }
+
+            data.transactions.forEach { tx ->
+                if (tx.type == "debit") {
+                    val btId = resolveWhoOrBill(tx)
+                    if (btId.isNotEmpty()) billTotals[btId] = (billTotals[btId] ?: 0.0) + tx.amount
+                }
+            }
+            val activeBillTotals = billTotals.filterValues { it > 0.0 }
+            data.billTypes.clear(); data.billTypes.putAll(activeBillTotals)
+
+            val peopleTotals = LinkedHashMap<String, Double>()
+            data.people.keys.forEach { peopleTotals[it] = 0.0 }
+            config.members.forEach { m -> if (!peopleTotals.containsKey(m.id)) peopleTotals[m.id] = 0.0 }
+
+            data.transactions.forEach { tx ->
+                if (tx.type == "credit") {
+                    val pid = resolveWhoOrBill(tx)
+                    if (pid.isNotEmpty()) peopleTotals[pid] = (peopleTotals[pid] ?: 0.0) + tx.amount
+                }
+            }
+            val activePeopleTotals = peopleTotals.filterValues { it > 0.0 }
+            data.people.clear(); data.people.putAll(activePeopleTotals)
+        }
+
+        val rawJson = formatJsonStringLikeWebsite(gson.toJson(data))
+        dataStore.saveCache(rawJson)
+        dataStore.setPendingDataSync(true, msg)
+    }
+
+    suspend fun syncPendingData(customToken: String? = null): Boolean = withContext(Dispatchers.IO) {
+        val token = customToken ?: dataStore.tokenFlow.firstOrNull()
+        var success = true
+
+        if (dataStore.hasPendingConfigSync()) {
+            val localConfig = getAppConfig()
+            if (localConfig != null && !token.isNullOrBlank()) {
+                val configSuccess = updateRemoteConfig(token, localConfig, "Sync offline configuration updates")
+                if (!configSuccess) success = false
+            }
+        }
+
+        if (dataStore.hasPendingDataSync()) {
+            if (!token.isNullOrBlank()) {
+                val localData = getCachedData()
+                if (localData != null) {
+                    val ctx = getLatestDataAndContext(token)
+                    if (ctx != null) {
+                        val (authHeader, sha, remoteData) = ctx
+                        
+                        val remoteIds = remoteData.transactions.map { it.id }.toSet()
+                        val pendingTxs = localData.transactions.filter { !remoteIds.contains(it.id) }
+                        
+                        val finalTxList = remoteData.transactions.toMutableList()
+                        pendingTxs.reversed().forEach { tx ->
+                            finalTxList.add(0, tx)
+                        }
+                        remoteData.transactions.clear()
+                        remoteData.transactions.addAll(finalTxList)
+
+                        val msg = dataStore.getPendingCommitMsg() ?: "Sync offline transactions"
+                        try {
+                            commitData(authHeader, remoteData, sha, msg)
+                            dataStore.setPendingDataSync(false)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            success = false
+                        }
+                    } else {
+                        success = false
+                    }
+                }
+            } else {
+                success = false
+            }
+        }
+
+        return@withContext success
     }
 
     suspend fun getCachedData(): FundData? = withContext(Dispatchers.IO) {
@@ -326,8 +425,13 @@ class Repository(private val dataStore: AppDataStore) {
     }
 
     suspend fun fetchData(): FundData? = withContext(Dispatchers.IO) {
-        val config = fetchRemoteConfig() ?: getAppConfig() ?: return@withContext null
         val token = dataStore.tokenFlow.firstOrNull()
+
+        if (dataStore.hasPendingDataSync() || dataStore.hasPendingConfigSync()) {
+            syncPendingData(token)
+        }
+
+        val config = fetchRemoteConfig() ?: getAppConfig() ?: return@withContext getCachedData()
         val authHeader = if (!token.isNullOrBlank()) "token $token" else null
         val timestamp = System.currentTimeMillis()
         
@@ -354,8 +458,9 @@ class Repository(private val dataStore: AppDataStore) {
         
         if (data != null) {
             dataStore.saveCache(gson.toJson(data))
+            return@withContext data
         }
-        return@withContext data
+        return@withContext getCachedData()
     }
 
     suspend fun verifyToken(token: String): Boolean = withContext(Dispatchers.IO) {
@@ -429,109 +534,150 @@ class Repository(private val dataStore: AppDataStore) {
         
         api.updateFile(authHeader, config.repoOwner, config.repoName, config.dataFileName, request)
         dataStore.saveCache(rawJson)
+        dataStore.setPendingDataSync(false)
     }
 
     suspend fun addTransaction(token: String, newTx: Transaction): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            currentData.transactions.add(0, newTx)
-            val personName = getAppConfig()?.members?.find { it.id == newTx.whoOrBill }?.name ?: newTx.whoOrBill
-            val billName = getAppConfig()?.billTypes?.find { it.id == newTx.whoOrBill }?.name ?: newTx.whoOrBill
-            val currency = getAppConfig()?.currency ?: ""
-            val amtStr = formatAmount(newTx.amount)
-            
-            val msg = if (newTx.type == "credit") {
-                val noteStr = if (newTx.note.isNotEmpty()) " for ${newTx.note}" else ""
-                "Credit: $personName added $currency$amtStr$noteStr"
-            } else {
-                val noteStrP = if (newTx.note.isNotEmpty()) " (${newTx.note})" else ""
-                val splitCount = newTx.splitAmong?.size ?: 0
-                "Debit: $currency$amtStr used for $billName$noteStrP - Split among $splitCount"
+        val personName = getAppConfig()?.members?.find { it.id == newTx.whoOrBill }?.name ?: newTx.whoOrBill
+        val billName = getAppConfig()?.billTypes?.find { it.id == newTx.whoOrBill }?.name ?: newTx.whoOrBill
+        val currency = getAppConfig()?.currency ?: ""
+        val amtStr = formatAmount(newTx.amount)
+        
+        val msg = if (newTx.type == "credit") {
+            val noteStr = if (newTx.note.isNotEmpty()) " for ${newTx.note}" else ""
+            "Credit: $personName added $currency$amtStr$noteStr"
+        } else {
+            val noteStrP = if (newTx.note.isNotEmpty()) " (${newTx.note})" else ""
+            val splitCount = newTx.splitAmong?.size ?: 0
+            "Debit: $currency$amtStr used for $billName$noteStrP - Split among $splitCount"
+        }
+
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                currentData.transactions.add(0, newTx)
+                try {
+                    commitData(authHeader, currentData, sha, msg)
+                    dataStore.setPendingDataSync(false)
+                    return@withContext true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
-            commitData(authHeader, currentData, sha, msg)
-            true
-        } catch (e: Exception) { false }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        localData.transactions.removeAll { it.id == newTx.id }
+        localData.transactions.add(0, newTx)
+        saveLocalDataAndMarkPending(localData, msg)
+        true
     }
 
     suspend fun addQuickExpense(token: String, payerId: String, billTypeId: String, amount: Double, note: String, date: String, exemptions: List<String>): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val config = getAppConfig() ?: return@withContext false
-            
-            val parentId = "tx_exp_${System.currentTimeMillis()}"
-            
-            val payerName = config.members.find { it.id == payerId }?.name ?: payerId
-            val billName = config.billTypes.find { it.id == billTypeId }?.name ?: billTypeId
-            val referenceName = if (note.isNotEmpty()) note else billName
+        val config = getAppConfig() ?: return@withContext false
+        val parentId = "tx_exp_${System.currentTimeMillis()}"
+        val payerName = config.members.find { it.id == payerId }?.name ?: payerId
+        val billName = config.billTypes.find { it.id == billTypeId }?.name ?: billTypeId
+        val referenceName = if (note.isNotEmpty()) note else billName
 
-            val creditTx = Transaction(
-                id = "${parentId}_credit", type = "credit",
-                whoOrBill = payerId, payerId = payerId, amount = amount,
-                note = "$payerName paid for $referenceName", date = date, parentId = parentId
-            )
+        val creditTx = Transaction(
+            id = "${parentId}_credit", type = "credit",
+            whoOrBill = payerId, payerId = payerId, amount = amount,
+            note = "$payerName paid for $referenceName", date = date, parentId = parentId
+        )
 
-            val activeMembers = config.members.filter { it.active }.map { it.id }
-            val splitAmong = activeMembers.filter { !exemptions.contains(it) }
+        val activeMembers = config.members.filter { it.active }.map { it.id }
+        val splitAmong = activeMembers.filter { !exemptions.contains(it) }
 
-            val debitTx = Transaction(
-                id = "${parentId}_debit", type = "debit",
-                whoOrBill = billTypeId, billTypeId = billTypeId, amount = amount,
-                note = "$referenceName is paid by $payerName", date = date, parentId = parentId,
-                splitAmong = splitAmong
-            )
+        val debitTx = Transaction(
+            id = "${parentId}_debit", type = "debit",
+            whoOrBill = billTypeId, billTypeId = billTypeId, amount = amount,
+            note = "$referenceName is paid by $payerName", date = date, parentId = parentId,
+            splitAmong = splitAmong
+        )
 
-            currentData.transactions.add(0, creditTx)
-            currentData.transactions.add(0, debitTx)
-            val currency = config.currency
-            val amtStr = formatAmount(amount)
-            val noteStr = if (note.isNotEmpty()) " ($note)" else ""
-            
-            commitData(authHeader, currentData, sha, "Expense: $payerName paid $currency$amtStr for $billName$noteStr - Split among ${splitAmong.size}")
-            true
-        } catch (e: Exception) { false }
+        val currency = config.currency
+        val amtStr = formatAmount(amount)
+        val noteStr = if (note.isNotEmpty()) " ($note)" else ""
+        val msg = "Expense: $payerName paid $currency$amtStr for $billName$noteStr - Split among ${splitAmong.size}"
+
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                currentData.transactions.add(0, creditTx)
+                currentData.transactions.add(0, debitTx)
+                try {
+                    commitData(authHeader, currentData, sha, msg)
+                    dataStore.setPendingDataSync(false)
+                    return@withContext true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        localData.transactions.add(0, creditTx)
+        localData.transactions.add(0, debitTx)
+        saveLocalDataAndMarkPending(localData, msg)
+        true
     }
 
     suspend fun editQuickExpense(token: String, parentId: String, payerId: String, billTypeId: String, amount: Double, note: String, date: String, exemptions: List<String>): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val config = getAppConfig() ?: return@withContext false
+        val config = getAppConfig() ?: return@withContext false
+        val payerName = config.members.find { it.id == payerId }?.name ?: payerId
+        val billName = config.billTypes.find { it.id == billTypeId }?.name ?: billTypeId
+        val referenceName = if (note.isNotEmpty()) note else billName
+        val activeMembers = config.members.filter { it.active }.map { it.id }
+        val splitAmong = activeMembers.filter { !exemptions.contains(it) }
 
-            val creditIndex = currentData.transactions.indexOfFirst { it.parentId == parentId && it.type == "credit" }
-            val debitIndex = currentData.transactions.indexOfFirst { it.parentId == parentId && it.type == "debit" }
+        val currency = config.currency
+        val amtStr = formatAmount(amount)
+        val noteStr = if (note.isNotEmpty()) " ($note)" else ""
+        val msg = "Edited Expense: $payerName paid $currency$amtStr for $billName$noteStr"
 
-            if (creditIndex == -1 || debitIndex == -1) return@withContext false
+        fun applyExpenseEdit(data: FundData): Boolean {
+            val creditIndex = data.transactions.indexOfFirst { it.parentId == parentId && it.type == "credit" }
+            val debitIndex = data.transactions.indexOfFirst { it.parentId == parentId && it.type == "debit" }
+            if (creditIndex == -1 || debitIndex == -1) return false
 
-            val payerName = config.members.find { it.id == payerId }?.name ?: payerId
-            val billName = config.billTypes.find { it.id == billTypeId }?.name ?: billTypeId
-            val referenceName = if (note.isNotEmpty()) note else billName
-
-            val creditTx = currentData.transactions[creditIndex].copy(
+            val creditTx = data.transactions[creditIndex].copy(
                 whoOrBill = payerId, payerId = payerId, amount = amount,
                 note = "$payerName paid for $referenceName", date = date
             )
-
-            val activeMembers = config.members.filter { it.active }.map { it.id }
-            val splitAmong = activeMembers.filter { !exemptions.contains(it) }
-
-            val debitTx = currentData.transactions[debitIndex].copy(
+            val debitTx = data.transactions[debitIndex].copy(
                 whoOrBill = billTypeId, billTypeId = billTypeId, amount = amount,
                 note = "$referenceName is paid by $payerName", date = date,
                 splitAmong = splitAmong
             )
+            data.transactions[creditIndex] = creditTx
+            data.transactions[debitIndex] = debitTx
+            return true
+        }
 
-            currentData.transactions[creditIndex] = creditTx
-            currentData.transactions[debitIndex] = debitTx
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                if (applyExpenseEdit(currentData)) {
+                    try {
+                        commitData(authHeader, currentData, sha, msg)
+                        dataStore.setPendingDataSync(false)
+                        return@withContext true
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
 
-            val currency = config.currency
-            val amtStr = formatAmount(amount)
-            val noteStr = if (note.isNotEmpty()) " ($note)" else ""
-
-            commitData(authHeader, currentData, sha, "Edited Expense: $payerName paid $currency$amtStr for $billName$noteStr")
+        val localData = getCachedData() ?: FundData()
+        if (applyExpenseEdit(localData)) {
+            saveLocalDataAndMarkPending(localData, msg)
             true
-        } catch (e: Exception) { false }
+        } else false
     }
 
     suspend fun addDistribution(
@@ -541,36 +687,48 @@ class Repository(private val dataStore: AppDataStore) {
         date: String,
         participantIds: List<String> = emptyList()
     ): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val config = getAppConfig() ?: return@withContext false
-            
-            val activeMembers = config.members.filter { it.active }.map { it.id }
-            val distributionMembers = if (participantIds.isNotEmpty()) {
-                participantIds.filter { activeMembers.contains(it) }
-            } else {
-                activeMembers
+        val config = getAppConfig() ?: return@withContext false
+        val activeMembers = config.members.filter { it.active }.map { it.id }
+        val distributionMembers = if (participantIds.isNotEmpty()) {
+            participantIds.filter { activeMembers.contains(it) }
+        } else {
+            activeMembers
+        }
+        if (distributionMembers.isEmpty()) return@withContext false
+        
+        val splitAmount = totalAmount / distributionMembers.size
+        val parentId = "tx_dist_${System.currentTimeMillis()}"
+        val newTxs = distributionMembers.mapIndexed { index, personId ->
+            Transaction(
+                id = "${parentId}_$index", type = "credit", 
+                payerId = personId, whoOrBill = personId,
+                note = note.ifEmpty { "Distribution" }, amount = splitAmount, 
+                date = date, parentId = parentId, distributionTotal = totalAmount
+            )
+        }
+        val amtStr = formatAmount(totalAmount)
+        val noteStr = if (note.isNotEmpty()) " for $note" else ""
+        val msg = "Distributed ${config.currency}$amtStr among ${distributionMembers.size} people$noteStr"
+
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                newTxs.forEach { currentData.transactions.add(0, it) }
+                try {
+                    commitData(authHeader, currentData, sha, msg)
+                    dataStore.setPendingDataSync(false)
+                    return@withContext true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
-            if (distributionMembers.isEmpty()) return@withContext false
-            
-            val splitAmount = totalAmount / distributionMembers.size
-            val parentId = "tx_dist_${System.currentTimeMillis()}"
-            
-            distributionMembers.forEachIndexed { index, personId ->
-                val tx = Transaction(
-                    id = "${parentId}_$index", type = "credit", 
-                    payerId = personId, whoOrBill = personId,
-                    note = note.ifEmpty { "Distribution" }, amount = splitAmount, 
-                    date = date, parentId = parentId, distributionTotal = totalAmount
-                )
-                currentData.transactions.add(0, tx)
-            }
-            val amtStr = formatAmount(totalAmount)
-            val noteStr = if (note.isNotEmpty()) " for $note" else ""
-            commitData(authHeader, currentData, sha, "Distributed ${config.currency}$amtStr among ${distributionMembers.size} people$noteStr")
-            true
-        } catch (e: Exception) { false }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        newTxs.forEach { localData.transactions.add(0, it) }
+        saveLocalDataAndMarkPending(localData, msg)
+        true
     }
 
     suspend fun saveDataToRemote(token: String): Boolean = withContext(Dispatchers.IO) {
@@ -593,85 +751,110 @@ class Repository(private val dataStore: AppDataStore) {
     }
 
     suspend fun addSettlement(token: String, payerId: String, receiverId: String, amount: Double, note: String, date: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val parentId = "tx_set_${System.currentTimeMillis()}"
-            
-            val payerName = getAppConfig()?.members?.find { it.id == payerId }?.name ?: payerId
-            val receiverName = getAppConfig()?.members?.find { it.id == receiverId }?.name ?: receiverId
-            val currency = getAppConfig()?.currency ?: ""
+        val parentId = "tx_set_${System.currentTimeMillis()}"
+        val payerName = getAppConfig()?.members?.find { it.id == payerId }?.name ?: payerId
+        val receiverName = getAppConfig()?.members?.find { it.id == receiverId }?.name ?: receiverId
+        val currency = getAppConfig()?.currency ?: ""
 
-            val payerTx = Transaction(
-                id = "${parentId}_payer", type = "credit", 
-                payerId = payerId, whoOrBill = payerId,
-                note = "Settlement to $receiverName" + (if(note.isNotEmpty()) ": $note" else ""),
-                amount = amount, date = date, parentId = parentId
-            )
-            val receiverTx = Transaction(
-                id = "${parentId}_rcvr", type = "credit", 
-                payerId = receiverId, whoOrBill = receiverId,
-                note = "Settlement from $payerName" + (if(note.isNotEmpty()) ": $note" else ""),
-                amount = -amount, date = date, parentId = parentId
-            )
-            
-            currentData.transactions.add(0, payerTx)
-            currentData.transactions.add(0, receiverTx)
-            val amtStr = formatAmount(amount)
-            commitData(authHeader, currentData, sha, "Settlement: $payerName paid $currency$amtStr to $receiverName")
-            true
-        } catch (e: Exception) { false }
+        val payerTx = Transaction(
+            id = "${parentId}_payer", type = "credit", 
+            payerId = payerId, whoOrBill = payerId,
+            note = "Settlement to $receiverName" + (if(note.isNotEmpty()) ": $note" else ""),
+            amount = amount, date = date, parentId = parentId
+        )
+        val receiverTx = Transaction(
+            id = "${parentId}_rcvr", type = "credit", 
+            payerId = receiverId, whoOrBill = receiverId,
+            note = "Settlement from $payerName" + (if(note.isNotEmpty()) ": $note" else ""),
+            amount = -amount, date = date, parentId = parentId
+        )
+        
+        val amtStr = formatAmount(amount)
+        val msg = "Settlement: $payerName paid $currency$amtStr to $receiverName"
+
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                currentData.transactions.add(0, payerTx)
+                currentData.transactions.add(0, receiverTx)
+                try {
+                    commitData(authHeader, currentData, sha, msg)
+                    dataStore.setPendingDataSync(false)
+                    return@withContext true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        localData.transactions.add(0, payerTx)
+        localData.transactions.add(0, receiverTx)
+        saveLocalDataAndMarkPending(localData, msg)
+        true
     }
 
     suspend fun addTransfer(token: String, senderId: String, recipientId: String, amount: Double, note: String, date: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val parentId = "tx_trf_${System.currentTimeMillis()}"
-            
-            val senderName = getAppConfig()?.members?.find { it.id == senderId }?.name ?: senderId
-            val recipientName = getAppConfig()?.members?.find { it.id == recipientId }?.name ?: recipientId
-            val currency = getAppConfig()?.currency ?: ""
+        val parentId = "tx_trf_${System.currentTimeMillis()}"
+        val senderName = getAppConfig()?.members?.find { it.id == senderId }?.name ?: senderId
+        val recipientName = getAppConfig()?.members?.find { it.id == recipientId }?.name ?: recipientId
+        val currency = getAppConfig()?.currency ?: ""
 
-            val senderTx = Transaction(
-                id = "${parentId}_send", type = "credit", 
-                payerId = senderId, whoOrBill = senderId,
-                note = "Transfer to $recipientName" + (if(note.isNotEmpty()) ": $note" else ""),
-                amount = -amount, date = date, parentId = parentId
-            )
-            val recipientTx = Transaction(
-                id = "${parentId}_rcpt", type = "credit", 
-                payerId = recipientId, whoOrBill = recipientId,
-                note = "Transfer from $senderName" + (if(note.isNotEmpty()) ": $note" else ""),
-                amount = amount, date = date, parentId = parentId
-            )
-            
-            currentData.transactions.add(0, senderTx)
-            currentData.transactions.add(0, recipientTx)
-            val amtStr = formatAmount(amount)
-            commitData(authHeader, currentData, sha, "Transfer: $senderName transferred $currency$amtStr to $recipientName")
-            true
-        } catch (e: Exception) { false }
+        val senderTx = Transaction(
+            id = "${parentId}_send", type = "credit", 
+            payerId = senderId, whoOrBill = senderId,
+            note = "Transfer to $recipientName" + (if(note.isNotEmpty()) ": $note" else ""),
+            amount = -amount, date = date, parentId = parentId
+        )
+        val recipientTx = Transaction(
+            id = "${parentId}_rcpt", type = "credit", 
+            payerId = recipientId, whoOrBill = recipientId,
+            note = "Transfer from $senderName" + (if(note.isNotEmpty()) ": $note" else ""),
+            amount = amount, date = date, parentId = parentId
+        )
+        
+        val amtStr = formatAmount(amount)
+        val msg = "Transfer: $senderName transferred $currency$amtStr to $recipientName"
+
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                currentData.transactions.add(0, senderTx)
+                currentData.transactions.add(0, recipientTx)
+                try {
+                    commitData(authHeader, currentData, sha, msg)
+                    dataStore.setPendingDataSync(false)
+                    return@withContext true
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        localData.transactions.add(0, senderTx)
+        localData.transactions.add(0, recipientTx)
+        saveLocalDataAndMarkPending(localData, msg)
+        true
     }
 
     suspend fun deleteTransaction(token: String, transactionId: String, reason: String? = null): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val config = getAppConfig()
-            val currency = config?.currency ?: ""
+        val config = getAppConfig()
+        val currency = config?.currency ?: ""
+        val reasonStr = reason?.trim() ?: ""
 
-            val targetTx = currentData.transactions.find { it.id == transactionId } ?: return@withContext false
+        fun applyDelete(data: FundData): Pair<Boolean, String> {
+            val targetTx = data.transactions.find { it.id == transactionId } ?: return Pair(false, "")
             val parentId = targetTx.parentId
             val isExpenseGroup = parentId != null && parentId.startsWith("tx_exp")
 
             val toDelete = if (parentId != null) 
-                currentData.transactions.filter { it.parentId == parentId } 
+                data.transactions.filter { it.parentId == parentId } 
             else listOf(targetTx)
 
-            currentData.transactions.removeAll(toDelete)
-
-            val reasonStr = reason?.trim() ?: ""
+            data.transactions.removeAll(toDelete)
 
             val msg = if (isExpenseGroup) {
                 val creditTx = toDelete.find { it.type == "credit" } ?: targetTx
@@ -697,22 +880,42 @@ class Repository(private val dataStore: AppDataStore) {
                 val rStr = if (reasonStr.isNotEmpty()) " - $reasonStr" else ""
                 "Deleted Debit: $billName ($currency$amtStr)$rStr"
             }
+            return Pair(true, msg)
+        }
 
-            commitData(authHeader, currentData, sha, msg)
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                val (success, msg) = applyDelete(currentData)
+                if (success) {
+                    try {
+                        commitData(authHeader, currentData, sha, msg)
+                        dataStore.setPendingDataSync(false)
+                        return@withContext true
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        val (success, msg) = applyDelete(localData)
+        if (success) {
+            saveLocalDataAndMarkPending(localData, msg)
             true
-        } catch (e: Exception) { false }
+        } else false
     }
 
     suspend fun editTransaction(token: String, updatedTx: Transaction): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val ctx = getLatestDataAndContext(token) ?: return@withContext false
-            val (authHeader, sha, currentData) = ctx
-            val config = getAppConfig()
-            val currency = config?.currency ?: ""
+        val config = getAppConfig()
+        val currency = config?.currency ?: ""
 
-            val index = currentData.transactions.indexOfFirst { it.id == updatedTx.id }
-            if (index == -1) return@withContext false
-            val oldTx = currentData.transactions[index]
+        fun applyEdit(data: FundData): Pair<Boolean, String> {
+            val index = data.transactions.indexOfFirst { it.id == updatedTx.id }
+            if (index == -1) return Pair(false, "")
+            val oldTx = data.transactions[index]
 
             val parentId = updatedTx.parentId ?: oldTx.parentId
             val targetTx = updatedTx.copy(parentId = parentId)
@@ -720,8 +923,8 @@ class Repository(private val dataStore: AppDataStore) {
             val isExpenseGroup = parentId != null && parentId.startsWith("tx_exp")
 
             if (isExpenseGroup) {
-                val linkedIndex = currentData.transactions.indexOfFirst { it.parentId == parentId && it.id != updatedTx.id }
-                val linkedTx = if (linkedIndex != -1) currentData.transactions[linkedIndex] else null
+                val linkedIndex = data.transactions.indexOfFirst { it.parentId == parentId && it.id != updatedTx.id }
+                val linkedTx = if (linkedIndex != -1) data.transactions[linkedIndex] else null
 
                 val creditTx = if (targetTx.type == "credit") targetTx else linkedTx
                 val debitTx = if (targetTx.type == "debit") targetTx else linkedTx
@@ -749,7 +952,7 @@ class Repository(private val dataStore: AppDataStore) {
                     parentId = parentId,
                     note = if (targetTx.type == "credit") creditNote else debitNote
                 )
-                currentData.transactions[index] = finalUpdatedTx
+                data.transactions[index] = finalUpdatedTx
 
                 if (linkedIndex != -1 && linkedTx != null) {
                     val newLinkedTx = linkedTx.copy(
@@ -758,16 +961,15 @@ class Repository(private val dataStore: AppDataStore) {
                         date = targetTx.date,
                         note = if (linkedTx.type == "credit") creditNote else debitNote
                     )
-                    currentData.transactions[linkedIndex] = newLinkedTx
+                    data.transactions[linkedIndex] = newLinkedTx
                 }
 
                 val noteStr = if (cleanNote.isNotEmpty()) " ($cleanNote)" else ""
                 val msg = "Edited Expense: $payerName paid $currency$amtStr for $billName$noteStr"
-                commitData(authHeader, currentData, sha, msg)
-                return@withContext true
+                return Pair(true, msg)
             }
 
-            currentData.transactions[index] = targetTx
+            data.transactions[index] = targetTx
             val amtStr = formatAmount(targetTx.amount)
             val msg = if (targetTx.type == "credit") {
                 val personName = config?.members?.find { it.id == targetTx.whoOrBill }?.name ?: targetTx.whoOrBill
@@ -779,9 +981,32 @@ class Repository(private val dataStore: AppDataStore) {
                 "Edited Debit: $currency$amtStr used for $billName$noteStr"
             }
 
-            commitData(authHeader, currentData, sha, msg)
+            return Pair(true, msg)
+        }
+
+        if (token.isNotBlank()) {
+            val ctx = getLatestDataAndContext(token)
+            if (ctx != null) {
+                val (authHeader, sha, currentData) = ctx
+                val (success, msg) = applyEdit(currentData)
+                if (success) {
+                    try {
+                        commitData(authHeader, currentData, sha, msg)
+                        dataStore.setPendingDataSync(false)
+                        return@withContext true
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+        }
+
+        val localData = getCachedData() ?: FundData()
+        val (success, msg) = applyEdit(localData)
+        if (success) {
+            saveLocalDataAndMarkPending(localData, msg)
             true
-        } catch (e: Exception) { false }
+        } else false
     }
 
     suspend fun calculateBalances(data: FundData): Map<String, Double> {

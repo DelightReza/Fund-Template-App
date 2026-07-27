@@ -21,6 +21,40 @@ class AppDataStore(private val context: Context) {
         val CONFIG_URL = stringPreferencesKey("config_url")
         val CACHED_CONFIG = stringPreferencesKey("cached_config_json")
         val SAVED_REPOS = stringSetPreferencesKey("saved_repo_urls")
+        val PENDING_DATA_SYNC = androidx.datastore.preferences.core.booleanPreferencesKey("pending_data_sync")
+        val PENDING_CONFIG_SYNC = androidx.datastore.preferences.core.booleanPreferencesKey("pending_config_sync")
+        val PENDING_COMMIT_MSG = stringPreferencesKey("pending_commit_msg")
+    }
+
+    val pendingSyncFlow: Flow<Boolean> = context.dataStore.data.map { 
+        (it[PENDING_DATA_SYNC] == true) || (it[PENDING_CONFIG_SYNC] == true)
+    }
+
+    suspend fun setPendingDataSync(pending: Boolean, msg: String? = null) {
+        context.dataStore.edit { preferences ->
+            preferences[PENDING_DATA_SYNC] = pending
+            if (pending && !msg.isNullOrEmpty()) {
+                preferences[PENDING_COMMIT_MSG] = msg
+            } else if (!pending) {
+                preferences.remove(PENDING_COMMIT_MSG)
+            }
+        }
+    }
+
+    suspend fun setPendingConfigSync(pending: Boolean) {
+        context.dataStore.edit { it[PENDING_CONFIG_SYNC] = pending }
+    }
+
+    suspend fun hasPendingDataSync(): Boolean {
+        return context.dataStore.data.map { it[PENDING_DATA_SYNC] == true }.first()
+    }
+
+    suspend fun hasPendingConfigSync(): Boolean {
+        return context.dataStore.data.map { it[PENDING_CONFIG_SYNC] == true }.first()
+    }
+
+    suspend fun getPendingCommitMsg(): String? {
+        return context.dataStore.data.map { it[PENDING_COMMIT_MSG] }.first()
     }
 
     val tokenFlow: Flow<String?> = context.dataStore.data.map { preferences ->
