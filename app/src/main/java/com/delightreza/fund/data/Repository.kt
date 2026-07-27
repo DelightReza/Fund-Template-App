@@ -393,7 +393,8 @@ class Repository(private val dataStore: AppDataStore) {
                 if (btId.isNotEmpty()) billTotals[btId] = (billTotals[btId] ?: 0.0) + tx.amount
             }
         }
-        data.billTypes.clear(); data.billTypes.putAll(billTotals)
+        val activeBillTotals = billTotals.filterValues { it > 0.0 }
+        data.billTypes.clear(); data.billTypes.putAll(activeBillTotals)
 
         val peopleTotals = LinkedHashMap<String, Double>()
         data.people.keys.forEach { peopleTotals[it] = 0.0 }
@@ -405,7 +406,8 @@ class Repository(private val dataStore: AppDataStore) {
                 if (pid.isNotEmpty()) peopleTotals[pid] = (peopleTotals[pid] ?: 0.0) + tx.amount
             }
         }
-        data.people.clear(); data.people.putAll(peopleTotals)
+        val activePeopleTotals = peopleTotals.filterValues { it > 0.0 }
+        data.people.clear(); data.people.putAll(activePeopleTotals)
         
         val rawJson = formatJsonStringLikeWebsite(gson.toJson(data))
 
