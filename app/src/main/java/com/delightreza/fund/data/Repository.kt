@@ -383,7 +383,10 @@ class Repository(private val dataStore: AppDataStore) {
     private suspend fun commitData(authHeader: String, data: FundData, sha: String?, msg: String) {
         val config = getAppConfig() ?: return
         
-        val billTotals = config.billTypes.associate { it.id to 0.0 }.toMutableMap()
+        val billTotals = LinkedHashMap<String, Double>()
+        data.billTypes.keys.forEach { billTotals[it] = 0.0 }
+        config.billTypes.forEach { bt -> if (!billTotals.containsKey(bt.id)) billTotals[bt.id] = 0.0 }
+
         data.transactions.forEach { tx ->
             if (tx.type == "debit") {
                 val btId = resolveWhoOrBill(tx)
@@ -392,7 +395,10 @@ class Repository(private val dataStore: AppDataStore) {
         }
         data.billTypes.clear(); data.billTypes.putAll(billTotals)
 
-        val peopleTotals = config.members.associate { it.id to 0.0 }.toMutableMap()
+        val peopleTotals = LinkedHashMap<String, Double>()
+        data.people.keys.forEach { peopleTotals[it] = 0.0 }
+        config.members.forEach { m -> if (!peopleTotals.containsKey(m.id)) peopleTotals[m.id] = 0.0 }
+
         data.transactions.forEach { tx ->
             if (tx.type == "credit") {
                 val pid = resolveWhoOrBill(tx)
