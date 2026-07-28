@@ -37,6 +37,7 @@ import com.delightreza.fund.data.Repository
 import com.delightreza.fund.data.Transaction
 import com.delightreza.fund.utils.DateUtils
 import com.delightreza.fund.utils.FormatUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -84,6 +85,7 @@ fun AddTransactionScreen(
 
     LaunchedEffect(type, isLoadingData) {
         if (!isLoadingData) {
+            delay(150)
             val types = listOf("expense", "debit", "credit", "distribute", "settlement", "transfer")
             val idx = types.indexOf(type)
             if (idx >= 0) typeRowState.animateScrollToItem(idx)
@@ -92,26 +94,29 @@ fun AddTransactionScreen(
 
     LaunchedEffect(selectedId, type, isLoadingData, allMembers) {
         if (!isLoadingData && type == "credit" && selectedId.isNotEmpty()) {
-            val idx = allMembers.indexOfFirst { it.id == selectedId }
+            delay(150)
+            val idx = allMembers.indexOfFirst { it.id.equals(selectedId, ignoreCase = true) || it.name.equals(selectedId, ignoreCase = true) }
             if (idx >= 0) creditMembersState.animateScrollToItem(idx)
         }
     }
 
     LaunchedEffect(selectedId, type, isLoadingData, activeBillTypes) {
         if (!isLoadingData && type == "debit" && selectedId.isNotEmpty()) {
-            val idx = activeBillTypes.indexOfFirst { it.id == selectedId }
+            delay(150)
+            val idx = activeBillTypes.indexOfFirst { it.id.equals(selectedId, ignoreCase = true) || it.name.equals(selectedId, ignoreCase = true) }
             if (idx >= 0) debitBillTypesState.animateScrollToItem(idx)
         }
     }
 
     LaunchedEffect(fromId, toId, type, isLoadingData, allMembers, activeBillTypes) {
         if (!isLoadingData && type == "expense") {
+            delay(150)
             if (fromId.isNotEmpty()) {
-                val fromIdx = allMembers.indexOfFirst { it.id == fromId }
+                val fromIdx = allMembers.indexOfFirst { it.id.equals(fromId, ignoreCase = true) || it.name.equals(fromId, ignoreCase = true) }
                 if (fromIdx >= 0) expenseFromMembersState.animateScrollToItem(fromIdx)
             }
             if (toId.isNotEmpty()) {
-                val toIdx = activeBillTypes.indexOfFirst { it.id == toId }
+                val toIdx = activeBillTypes.indexOfFirst { it.id.equals(toId, ignoreCase = true) || it.name.equals(toId, ignoreCase = true) }
                 if (toIdx >= 0) expenseToBillTypesState.animateScrollToItem(toIdx)
             }
         }
@@ -119,12 +124,13 @@ fun AddTransactionScreen(
 
     LaunchedEffect(fromId, toId, type, isLoadingData, allMembers) {
         if (!isLoadingData && (type == "settlement" || type == "transfer")) {
+            delay(150)
             if (fromId.isNotEmpty()) {
-                val fromIdx = allMembers.indexOfFirst { it.id == fromId }
+                val fromIdx = allMembers.indexOfFirst { it.id.equals(fromId, ignoreCase = true) || it.name.equals(fromId, ignoreCase = true) }
                 if (fromIdx >= 0) settleFromMembersState.animateScrollToItem(fromIdx)
             }
             if (toId.isNotEmpty()) {
-                val toIdx = allMembers.indexOfFirst { it.id == toId }
+                val toIdx = allMembers.indexOfFirst { it.id.equals(toId, ignoreCase = true) || it.name.equals(toId, ignoreCase = true) }
                 if (toIdx >= 0) settleToMembersState.animateScrollToItem(toIdx)
             }
         }
@@ -427,7 +433,7 @@ fun AddTransactionScreen(
                                 LazyRow(state = creditMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     items(allMembers.size) { i ->
                                         val m = allMembers[i]
-                                        val isSelected = selectedId == m.id
+                                        val isSelected = selectedId.equals(m.id, ignoreCase = true) || selectedId.equals(m.name, ignoreCase = true)
                                         InputChip(
                                             selected = isSelected,
                                             onClick = { selectedId = m.id },
@@ -441,7 +447,7 @@ fun AddTransactionScreen(
                                 LazyRow(state = debitBillTypesState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     items(activeBillTypes.size) { i ->
                                         val b = activeBillTypes[i]
-                                        val isSelected = selectedId == b.id
+                                        val isSelected = selectedId.equals(b.id, ignoreCase = true) || selectedId.equals(b.name, ignoreCase = true)
                                         InputChip(
                                             selected = isSelected,
                                             onClick = { selectedId = b.id },
@@ -459,7 +465,7 @@ fun AddTransactionScreen(
                             LazyRow(state = expenseFromMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(allMembers.size) { i ->
                                     val m = allMembers[i]
-                                    val isSelected = fromId == m.id
+                                    val isSelected = fromId.equals(m.id, ignoreCase = true) || fromId.equals(m.name, ignoreCase = true)
                                     InputChip(
                                         selected = isSelected,
                                         onClick = { fromId = m.id },
@@ -474,7 +480,7 @@ fun AddTransactionScreen(
                             LazyRow(state = expenseToBillTypesState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(activeBillTypes.size) { i ->
                                     val b = activeBillTypes[i]
-                                    val isSelected = toId == b.id
+                                    val isSelected = toId.equals(b.id, ignoreCase = true) || toId.equals(b.name, ignoreCase = true)
                                     InputChip(
                                         selected = isSelected,
                                         onClick = { toId = b.id },
@@ -491,7 +497,7 @@ fun AddTransactionScreen(
                             LazyRow(state = settleFromMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(allMembers.size) { i ->
                                     val m = allMembers[i]
-                                    val isSelected = fromId == m.id
+                                    val isSelected = fromId.equals(m.id, ignoreCase = true) || fromId.equals(m.name, ignoreCase = true)
                                     InputChip(
                                         selected = isSelected,
                                         onClick = { fromId = m.id },
@@ -506,7 +512,7 @@ fun AddTransactionScreen(
                             LazyRow(state = settleToMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(allMembers.size) { i ->
                                     val m = allMembers[i]
-                                    val isSelected = toId == m.id
+                                    val isSelected = toId.equals(m.id, ignoreCase = true) || toId.equals(m.name, ignoreCase = true)
                                     InputChip(
                                         selected = isSelected,
                                         onClick = { toId = m.id },

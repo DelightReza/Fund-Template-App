@@ -37,19 +37,6 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        floatingActionButton = {
-            if (hasToken) {
-                FloatingActionButton(
-                    onClick = { rootNavController.navigate("add_transaction") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = CircleShape,
-                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add Transaction")
-                }
-            }
-        },
         bottomBar = {
             NavigationBar(
                 containerColor = MaterialTheme.colorScheme.surface,
