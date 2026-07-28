@@ -139,7 +139,7 @@ fun TransactionDetailScreen(
                             isDeleting = false
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("Delete") }
             },
             dismissButton = { OutlinedButton(onClick = { showDeleteDialog = false }) { Text("Cancel") } }
@@ -160,13 +160,13 @@ fun TransactionDetailScreen(
                 }
                 if (hasToken && !isDeleting && targetEditId != null) {
                     IconButton(onClick = { showDeleteDialog = true }) {
-                        Icon(Icons.Default.Delete, "Delete", tint = Color.Red)
+                        Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }
         )
     }) { p ->
-        if (isDeleting) Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Color.Red) }
+        if (isDeleting) Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = MaterialTheme.colorScheme.error) }
         else if (isLoading) Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         else if (groupTransactions.isNotEmpty()) GroupDetailView(groupTransactions, p, config, currentUser, balanceBefore, balanceAfter, userChange)
         else if (transaction != null) SingleTransactionView(transaction!!, p, navController, config, currentUser, balanceBefore, balanceAfter, userChange)
@@ -185,15 +185,15 @@ fun RunningBalanceCard(userName: String, before: Double?, change: Double, after:
             Text("Running Balance for $userName", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Balance Before:", color = Color.Gray)
+                Text("Balance Before:", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("${FormatUtils.formatAmount(before)} $currency", fontWeight = FontWeight.SemiBold)
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Transaction Impact:", color = Color.Gray)
+                Text("Transaction Impact:", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 val sign = if (change >= 0) "+" else ""
                 Text("$sign${FormatUtils.formatAmount(change)} $currency", fontWeight = FontWeight.Bold, color = if (change >= 0) Color(0xFF059669) else Color(0xFFDC2626))
             }
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color.Gray.copy(alpha = 0.2f))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("Balance After:", fontWeight = FontWeight.Bold)
                 Text("${FormatUtils.formatAmount(after)} $currency", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
@@ -228,11 +228,11 @@ fun GroupDetailView(
             Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Default.Layers, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
                 Text(groupTitle, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(DateUtils.formatToLocal(firstTx.date), style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Text(DateUtils.formatToLocal(firstTx.date), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Total Credit", style = MaterialTheme.typography.labelMedium); Text("${FormatUtils.formatAmount(totalCredit)} $currency", style = MaterialTheme.typography.titleLarge, color = Color(0xFF059669), fontWeight = FontWeight.Bold) }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Total Debit", style = MaterialTheme.typography.labelMedium); Text("${FormatUtils.formatAmount(totalDebit)} $currency", style = MaterialTheme.typography.titleLarge, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold) }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Total Credit", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${FormatUtils.formatAmount(totalCredit)} $currency", style = MaterialTheme.typography.titleLarge, color = Color(0xFF059669), fontWeight = FontWeight.Bold) }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("Total Debit", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text("${FormatUtils.formatAmount(totalDebit)} $currency", style = MaterialTheme.typography.titleLarge, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -246,10 +246,14 @@ fun GroupDetailView(
             } else {
                 config?.billTypes?.find { it.id == (tx.billTypeId ?: tx.whoOrBill) }?.name ?: tx.whoOrBill
             }
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column { Text(displayName, fontWeight = FontWeight.Bold); if(tx.note.isNotEmpty()) Text(tx.note, style = MaterialTheme.typography.bodySmall, color = Color.Gray) }
+                        Column { Text(displayName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface); if(tx.note.isNotEmpty()) Text(tx.note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         Text("${if(tx.type=="credit") "+" else "-"}${FormatUtils.formatAmount(tx.amount)} $currency", color = if(tx.type=="credit") Color(0xFF059669) else Color(0xFFDC2626), fontWeight = FontWeight.Bold)
                     }
 
@@ -260,12 +264,12 @@ fun GroupDetailView(
                         if (splitMemberIds.isNotEmpty()) {
                             val perPerson = tx.amount / splitMemberIds.size.coerceAtLeast(1)
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Split Details:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                            Text("Split Details:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             splitMemberIds.forEach { id ->
                                 val mName = config?.members?.find { m -> m.id == id }?.name ?: id
                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(mName, fontSize = 12.sp)
-                                    Text("${FormatUtils.formatAmount(perPerson)} $currency", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                    Text(mName, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${FormatUtils.formatAmount(perPerson)} $currency", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                                 }
                             }
                         }
@@ -295,16 +299,31 @@ fun SingleTransactionView(
             RunningBalanceCard(currentUserName, balanceBefore, userChange, balanceAfter, currency)
         }
 
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White), modifier = Modifier.fillMaxWidth()) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(modifier = Modifier.padding(32.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(modifier = Modifier.size(64.dp).clip(CircleShape).background(if(tx.type=="credit") Color(0xFFD1FAE5) else Color(0xFFFFE4E6)), contentAlignment = Alignment.Center) {
-                    Icon(if(tx.type=="credit") Icons.Default.Check else Icons.Default.Receipt, null, tint = if(tx.type=="credit") Color(0xFF059669) else Color(0xFFE11D48), modifier = Modifier.size(32.dp))
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(if(tx.type=="credit") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if(tx.type=="credit") Icons.Default.Check else Icons.Default.Receipt,
+                        null,
+                        tint = if(tx.type=="credit") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.size(32.dp)
+                    )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(if(tx.type=="credit") "Money Received" else "Bill Payment", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                Text("${FormatUtils.formatAmount(tx.amount)} $currency", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold)
+                Text(if(tx.type=="credit") "Money Received" else "Bill Payment", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${FormatUtils.formatAmount(tx.amount)} $currency", fontSize = 36.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
             }
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.LightGray.copy(alpha = 0.5f))
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
                 val displayName = if(tx.type == "credit") config?.members?.find { it.id == (tx.payerId ?: tx.whoOrBill) }?.name ?: tx.whoOrBill
                 else config?.billTypes?.find { it.id == (tx.billTypeId ?: tx.whoOrBill) }?.name ?: tx.whoOrBill
@@ -313,8 +332,8 @@ fun SingleTransactionView(
                 DetailRow("Date", DateUtils.formatToLocal(tx.date))
                 if (tx.note.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text("Note", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                    Text(tx.note, fontSize = 16.sp)
+                    Text("Note", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(tx.note, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                 }
 
                 // Split Details Breakdown
@@ -324,15 +343,15 @@ fun SingleTransactionView(
                     if (splitMemberIds.isNotEmpty()) {
                         val perPerson = tx.amount / splitMemberIds.size.coerceAtLeast(1)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF))) {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                             Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
-                                Text("Split Breakdown (${splitMemberIds.size} people)", color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold)
+                                Text("Split Breakdown (${splitMemberIds.size} people)", color = MaterialTheme.colorScheme.onSecondaryContainer, fontWeight = FontWeight.Bold)
                                 Spacer(modifier = Modifier.height(8.dp))
                                 splitMemberIds.forEach { id ->
                                     val mName = config?.members?.find { m -> m.id == id }?.name ?: id
                                     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(mName, color = Color(0xFF1E40AF))
-                                        Text("${FormatUtils.formatAmount(perPerson)} $currency", fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
+                                        Text(mName, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                                        Text("${FormatUtils.formatAmount(perPerson)} $currency", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
                                     }
                                 }
                             }
@@ -360,6 +379,7 @@ fun SingleTransactionView(
 @Composable
 fun DetailRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Color.Gray); Text(value, fontWeight = FontWeight.Bold)
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }

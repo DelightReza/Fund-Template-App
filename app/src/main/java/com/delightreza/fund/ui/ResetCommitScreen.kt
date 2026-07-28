@@ -56,7 +56,7 @@ fun ResetCommitScreen(navController: NavController, repository: Repository, toke
                             }
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
                     Text("Reset Commit")
                 }
@@ -100,14 +100,14 @@ fun ResetCommitScreen(navController: NavController, repository: Repository, toke
         } else {
             LazyColumn(modifier = Modifier.padding(p).padding(16.dp)) {
                 item {
-                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)), modifier = Modifier.fillMaxWidth()) {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer), modifier = Modifier.fillMaxWidth()) {
                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = Color.Red)
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.onErrorContainer)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 "Warning: Resetting to an older commit will permanently overwrite recent changes in the repository.",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Color.Red
+                                color = MaterialTheme.colorScheme.onErrorContainer
                             )
                         }
                     }
@@ -119,6 +119,8 @@ fun ResetCommitScreen(navController: NavController, repository: Repository, toke
                 } else {
                     items(commits) { commit ->
                         Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 8.dp)
@@ -126,11 +128,11 @@ fun ResetCommitScreen(navController: NavController, repository: Repository, toke
                             elevation = CardDefaults.cardElevation(2.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(commit.commit.message, fontWeight = FontWeight.Bold)
+                                Text(commit.commit.message, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(commit.sha.take(7), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                                    Text(commit.commit.author.date, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text(commit.sha.take(7), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(commit.commit.author.date, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }

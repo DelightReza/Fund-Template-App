@@ -9,6 +9,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,6 +58,7 @@ fun ProfileScreen(
     var showTokenDialog by remember { mutableStateOf(false) }
     var tokenInput by remember { mutableStateOf("") }
     val savedToken by dataStore.tokenFlow.collectAsState(initial = "")
+    val darkModeMode by dataStore.darkModeFlow.collectAsState(initial = "system")
     
     LaunchedEffect(savedToken) {
         tokenInput = savedToken ?: ""
@@ -126,33 +128,74 @@ fun ProfileScreen(
             val spent = given - netBalance
             
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(24.dp), elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(modifier = Modifier.size(80.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)).pointerInput(Unit) {
-                        detectTapGestures(onLongPress = { showTokenDialog = true })
-                    }, contentAlignment = Alignment.Center) {
-                        Text(text = currentUserName.take(1), color = MaterialTheme.colorScheme.onPrimary, fontSize = 36.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(text = currentUserName, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            Text("Given", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f), textAlign = TextAlign.Center)
-                            Text(text = FormatUtils.formatAmount(given), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            androidx.compose.ui.graphics.Brush.linearGradient(
+                                colors = listOf(Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF312E81))
+                            )
+                        )
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.15f))
+                                .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onLongPress = { showTokenDialog = true })
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = currentUserName.take(1).uppercase(),
+                                color = Color.White,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
                         }
-                        VerticalDivider()
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            Text("Spent", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f), textAlign = TextAlign.Center)
-                            Text(text = FormatUtils.formatAmount(spent), style = MaterialTheme.typography.titleLarge, color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                        }
-                        VerticalDivider()
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                            Text("Net", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.7f), textAlign = TextAlign.Center)
-                            Text(text = "${if(netBalance > 0) "+" else ""}${FormatUtils.formatAmount(netBalance)}", style = MaterialTheme.typography.titleLarge, color = if (netBalance >= 0) Color(0xFF86EFAC) else Color(0xFFFDA4AF), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = currentUserName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(IntrinsicSize.Max),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                Text("Given", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                                Text(text = FormatUtils.formatAmount(given), style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            }
+                            VerticalDivider(color = Color.White.copy(alpha = 0.2f))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                Text("Spent", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                                Text(text = FormatUtils.formatAmount(spent), style = MaterialTheme.typography.titleLarge, color = Color(0xFFFCA5A5), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            }
+                            VerticalDivider(color = Color.White.copy(alpha = 0.2f))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                                Text("Net", style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.7f), textAlign = TextAlign.Center)
+                                Text(text = "${if(netBalance > 0) "+" else ""}${FormatUtils.formatAmount(netBalance)}", style = MaterialTheme.typography.titleLarge, color = if (netBalance >= 0) Color(0xFF86EFAC) else Color(0xFFFDA4AF), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                            }
                         }
                     }
                 }
@@ -182,7 +225,7 @@ fun ProfileScreen(
                 else !(tx.exemptions ?: emptyList()).contains(currentUser)
             }
             if (myTransactions.isEmpty()) {
-                item { Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Text("No recent activity.", color = Color.Gray, textAlign = TextAlign.Center) } }
+                item { Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Text("No recent activity.", color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center) } }
             } else {
                 items(myTransactions.take(30)) { tx ->
                     val myShare = if (tx.type == "debit") {
@@ -204,7 +247,7 @@ fun ProfileScreen(
             title = { Text("GitHub Token") },
             text = {
                 Column {
-                    Text("Enter your GitHub token for admin access.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text("Enter your GitHub token for admin access.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = tokenInput,
@@ -255,13 +298,13 @@ fun ProfileTransactionRow(tx: Transaction, myShare: Double, config: AppConfig?, 
             }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1)
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             Column(horizontalAlignment = Alignment.End) {
                 val sign = if (isPositiveEffect) "+" else "-"
                 Text(text = "$sign${FormatUtils.formatAmount(abs(myShare))}", color = color, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
-                if (tx.type == "debit") Text(text = "My Share", fontSize = 10.sp, color = Color.LightGray, textAlign = TextAlign.End)
+                if (tx.type == "debit") Text(text = "My Share", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.End)
             }
         }
     }

@@ -71,18 +71,21 @@ fun AdminScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 AdminActionCard(
                     title = "Quick Expense", icon = Icons.Default.Bolt, color = Color(0xFF3B82F6),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("add_transaction?type=expense") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("add_transaction?type=expense") }
                 )
                 AdminActionCard(
                     title = "Add Credit", icon = Icons.Default.ArrowDownward, color = Color(0xFF10B981),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("add_transaction?type=credit") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("add_transaction?type=credit") }
                 )
                 AdminActionCard(
                     title = "Add Debit", icon = Icons.Default.ArrowUpward, color = Color(0xFFEF4444),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("add_transaction?type=debit") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("add_transaction?type=debit") }
                 )
             }
         }
@@ -95,25 +98,31 @@ fun AdminScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 AdminActionCard(
                     title = "Distribute", icon = Icons.Default.Group, color = Color(0xFF8B5CF6),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("add_transaction?type=distribute") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("add_transaction?type=distribute") }
                 )
                 AdminActionCard(
                     title = "Settle Debt", icon = Icons.Default.Handshake, color = Color(0xFF059669),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("add_transaction?type=settlement") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("add_transaction?type=settlement") }
                 )
                 AdminActionCard(
                     title = "Transfer", icon = Icons.Default.SwapHoriz, color = Color(0xFF2563EB),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("add_transaction?type=transfer") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("add_transaction?type=transfer") }
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 AdminActionCard(
                     title = "Reset Commit", icon = Icons.Default.Restore, color = Color(0xFFEF4444),
-                    modifier = Modifier.weight(1f), onClick = { navController.navigate("reset_commit") }
+                    modifier = Modifier.weight(1f).fillMaxHeight(), onClick = { navController.navigate("reset_commit") }
                 )
                 Spacer(modifier = Modifier.weight(2f))
             }
@@ -137,14 +146,14 @@ fun AdminScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(fromName, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(toName, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                                 }
                                 Text("${FormatUtils.formatAmount(s.amount)} $currency", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             }
                             if (index < settlements.lastIndex) {
-                                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                             }
                         }
                     }
@@ -161,7 +170,8 @@ fun AdminScreen(
             )
             Spacer(modifier = Modifier.height(12.dp))
             Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { navController.navigate("settings") }
@@ -181,8 +191,8 @@ fun AdminScreen(
                     }
                     Spacer(modifier = Modifier.width(16.dp))
                     Column {
-                        Text("Manage Config", fontWeight = FontWeight.Bold)
-                        Text("Add or disable People & Bill Types", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                        Text("Manage Config", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                        Text("Add or disable People & Bill Types", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -193,22 +203,30 @@ fun AdminScreen(
 @Composable
 fun AdminActionCard(title: String, icon: ImageVector, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Card(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         modifier = modifier.clickable { onClick() }
     ) {
-        Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(44.dp)
                     .clip(CircleShape)
-                    .background(color.copy(alpha = 0.1f)),
+                    .background(color.copy(alpha = 0.12f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
+                Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
             }
             Spacer(modifier = Modifier.height(8.dp))
-            Text(title, fontSize = 12.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, lineHeight = 14.sp)
+            Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center, lineHeight = 14.sp)
         }
     }
 }

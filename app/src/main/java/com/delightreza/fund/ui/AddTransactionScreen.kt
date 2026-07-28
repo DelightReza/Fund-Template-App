@@ -2,21 +2,32 @@ package com.delightreza.fund.ui
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
@@ -25,6 +36,7 @@ import com.delightreza.fund.data.MemberConfig
 import com.delightreza.fund.data.Repository
 import com.delightreza.fund.data.Transaction
 import com.delightreza.fund.utils.DateUtils
+import com.delightreza.fund.utils.FormatUtils
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -61,6 +73,62 @@ fun AddTransactionScreen(
     var originalId by remember { mutableStateOf("") }
     var originalDate by remember { mutableStateOf("") }
     var originalParentId by remember { mutableStateOf<String?>(null) }
+
+    val typeRowState = rememberLazyListState()
+    val creditMembersState = rememberLazyListState()
+    val debitBillTypesState = rememberLazyListState()
+    val expenseFromMembersState = rememberLazyListState()
+    val expenseToBillTypesState = rememberLazyListState()
+    val settleFromMembersState = rememberLazyListState()
+    val settleToMembersState = rememberLazyListState()
+
+    LaunchedEffect(type, isLoadingData) {
+        if (!isLoadingData) {
+            val types = listOf("expense", "debit", "credit", "distribute", "settlement", "transfer")
+            val idx = types.indexOf(type)
+            if (idx >= 0) typeRowState.animateScrollToItem(idx)
+        }
+    }
+
+    LaunchedEffect(selectedId, type, isLoadingData, allMembers) {
+        if (!isLoadingData && type == "credit" && selectedId.isNotEmpty()) {
+            val idx = allMembers.indexOfFirst { it.id == selectedId }
+            if (idx >= 0) creditMembersState.animateScrollToItem(idx)
+        }
+    }
+
+    LaunchedEffect(selectedId, type, isLoadingData, activeBillTypes) {
+        if (!isLoadingData && type == "debit" && selectedId.isNotEmpty()) {
+            val idx = activeBillTypes.indexOfFirst { it.id == selectedId }
+            if (idx >= 0) debitBillTypesState.animateScrollToItem(idx)
+        }
+    }
+
+    LaunchedEffect(fromId, toId, type, isLoadingData, allMembers, activeBillTypes) {
+        if (!isLoadingData && type == "expense") {
+            if (fromId.isNotEmpty()) {
+                val fromIdx = allMembers.indexOfFirst { it.id == fromId }
+                if (fromIdx >= 0) expenseFromMembersState.animateScrollToItem(fromIdx)
+            }
+            if (toId.isNotEmpty()) {
+                val toIdx = activeBillTypes.indexOfFirst { it.id == toId }
+                if (toIdx >= 0) expenseToBillTypesState.animateScrollToItem(toIdx)
+            }
+        }
+    }
+
+    LaunchedEffect(fromId, toId, type, isLoadingData, allMembers) {
+        if (!isLoadingData && (type == "settlement" || type == "transfer")) {
+            if (fromId.isNotEmpty()) {
+                val fromIdx = allMembers.indexOfFirst { it.id == fromId }
+                if (fromIdx >= 0) settleFromMembersState.animateScrollToItem(fromIdx)
+            }
+            if (toId.isNotEmpty()) {
+                val toIdx = allMembers.indexOfFirst { it.id == toId }
+                if (toIdx >= 0) settleToMembersState.animateScrollToItem(toIdx)
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         val config = repository.getAppConfig()
@@ -124,9 +192,12 @@ fun AddTransactionScreen(
     }
 
     val themeColor = when(type) {
-        "credit" -> Color(0xFF059669); "expense" -> Color(0xFF2563EB)
-        "distribute" -> Color(0xFF8B5CF6); "settlement" -> Color(0xFF059669)
-        "transfer" -> Color(0xFF2563EB); else -> Color(0xFFDC2626)
+        "credit" -> Color(0xFF059669)
+        "expense" -> Color(0xFF4F46E5)
+        "distribute" -> Color(0xFF8B5CF6)
+        "settlement" -> Color(0xFF059669)
+        "transfer" -> Color(0xFF2563EB)
+        else -> Color(0xFFE11D48)
     }
 
     val handleSave = {
@@ -186,93 +257,360 @@ fun AddTransactionScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(pageTitle) }, navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "") } }) }
+        topBar = {
+            TopAppBar(
+                title = { Text(pageTitle, fontWeight = FontWeight.Bold) },
+                navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.Default.ArrowBack, "Back") } }
+            )
+        }
     ) { p ->
         if (isLoadingData || isSubmitting) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = themeColor) }
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = themeColor)
+            }
         } else {
             if (showConfirmation) {
                 AlertDialog(
                     onDismissRequest = { showConfirmation = false },
-                    title = { Text("Confirm") },
+                    title = { Text("Confirm Transaction") },
                     text = {
-                        Column {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             val cleanAmount = amount.toDoubleOrNull()?.let { if (it % 1.0 == 0.0) it.toInt().toString() else amount } ?: amount
-                            Text(text = "$cleanAmount $currency", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = themeColor)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(text = type.uppercase(), style = MaterialTheme.typography.titleMedium)
+                            Text(text = "$cleanAmount $currency", style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = themeColor)
+                            Text(text = "Type: ${type.uppercase()}", style = MaterialTheme.typography.titleMedium)
+                            if (note.isNotEmpty()) Text(text = "Note: $note", style = MaterialTheme.typography.bodyMedium)
                         }
                     },
-                    confirmButton = { Button(onClick = { showConfirmation = false; handleSave() }, colors = ButtonDefaults.buttonColors(containerColor = themeColor)) { Text("Confirm") } },
-                    dismissButton = { OutlinedButton(onClick = { showConfirmation = false }) { Text("Cancel") } }
+                    confirmButton = {
+                        Button(
+                            onClick = { showConfirmation = false; handleSave() },
+                            colors = ButtonDefaults.buttonColors(containerColor = themeColor),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Confirm & Submit") }
+                    },
+                    dismissButton = {
+                        OutlinedButton(
+                            onClick = { showConfirmation = false },
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Cancel") }
+                    }
                 )
             }
 
-            Column(modifier = Modifier.padding(p).padding(16.dp).verticalScroll(rememberScrollState())) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-                    item { FilterChip(selected = type == "expense", onClick = { type = "expense"; fromId = ""; toId = ""; excludedIds = emptySet() }, label = { Text("Quick Expense") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFDBEAFE), selectedLabelColor = Color(0xFF2563EB))) }
-                    item { FilterChip(selected = type == "debit", onClick = { type = "debit"; selectedId = ""; excludedIds = emptySet() }, label = { Text("Debit") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFFEE2E2), selectedLabelColor = Color(0xFFDC2626))) }
-                    item { FilterChip(selected = type == "credit", onClick = { type = "credit"; selectedId = "" }, label = { Text("Credit") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFD1FAE5), selectedLabelColor = Color(0xFF059669))) }
+            Column(
+                modifier = Modifier
+                    .padding(p)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Type Selector Chips
+                LazyRow(
+                    state = typeRowState,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    item {
+                        val col = Color(0xFF4F46E5)
+                        FilterChip(
+                            selected = type == "expense",
+                            onClick = { type = "expense"; fromId = ""; toId = ""; excludedIds = emptySet() },
+                            label = { Text("Quick Expense", fontWeight = if (type == "expense") FontWeight.Bold else FontWeight.Normal) },
+                            leadingIcon = if (type == "expense") { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = col.copy(alpha = 0.2f),
+                                selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
+                    item {
+                        val col = Color(0xFFE11D48)
+                        FilterChip(
+                            selected = type == "debit",
+                            onClick = { type = "debit"; selectedId = ""; excludedIds = emptySet() },
+                            label = { Text("Debit", fontWeight = if (type == "debit") FontWeight.Bold else FontWeight.Normal) },
+                            leadingIcon = if (type == "debit") { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = col.copy(alpha = 0.2f),
+                                selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
+                    item {
+                        val col = Color(0xFF059669)
+                        FilterChip(
+                            selected = type == "credit",
+                            onClick = { type = "credit"; selectedId = "" },
+                            label = { Text("Credit", fontWeight = if (type == "credit") FontWeight.Bold else FontWeight.Normal) },
+                            leadingIcon = if (type == "credit") { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = col.copy(alpha = 0.2f),
+                                selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    }
                     if (transactionIdToEdit == null) {
-                        item { FilterChip(selected = type == "distribute", onClick = { type = "distribute"; selectedId = "All"; excludedIds = emptySet() }, label = { Text("Distribute") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFEDE9FE), selectedLabelColor = Color(0xFF8B5CF6))) }
-                        item { FilterChip(selected = type == "settlement", onClick = { type = "settlement"; fromId = ""; toId = "" }, label = { Text("Settlement") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFD1FAE5), selectedLabelColor = Color(0xFF059669))) }
-                        item { FilterChip(selected = type == "transfer", onClick = { type = "transfer"; fromId = ""; toId = "" }, label = { Text("Transfer") }, colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFDBEAFE), selectedLabelColor = Color(0xFF2563EB))) }
-                    }
-                }
-
-                if (type == "debit" || type == "credit") {
-                    Text("Select Subject", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    if (type == "credit") {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(allMembers.size) { i -> val m = allMembers[i]; InputChip(selected = selectedId == m.id, onClick = { selectedId = m.id }, label = { Text(m.name + if (!m.active) " (Inactive)" else "") }, colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White)) } }
-                    } else {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(activeBillTypes.size) { i -> val b = activeBillTypes[i]; InputChip(selected = selectedId == b.id, onClick = { selectedId = b.id }, label = { Text("${b.icon} ${b.name}") }, colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White)) } }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (type == "expense") {
-                    Text("Paid By", style = MaterialTheme.typography.labelMedium, color = Color.Gray); Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(allMembers.size) { i -> InputChip(selected = fromId == allMembers[i].id, onClick = { fromId = allMembers[i].id }, label = { Text(allMembers[i].name + if (!allMembers[i].active) " (Inactive)" else "") }, colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White)) } }; Spacer(modifier = Modifier.height(16.dp))
-                    Text("For Bill Type", style = MaterialTheme.typography.labelMedium, color = Color.Gray); Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(activeBillTypes.size) { i -> InputChip(selected = toId == activeBillTypes[i].id, onClick = { toId = activeBillTypes[i].id }, label = { Text("${activeBillTypes[i].icon} ${activeBillTypes[i].name}") }, colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White)) } }; Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (type == "settlement" || type == "transfer") {
-                    Text("From / Paid By", style = MaterialTheme.typography.labelMedium, color = Color.Gray); Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(allMembers.size) { i -> InputChip(selected = fromId == allMembers[i].id, onClick = { fromId = allMembers[i].id }, label = { Text(allMembers[i].name + if (!allMembers[i].active) " (Inactive)" else "") }, colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White)) } }; Spacer(modifier = Modifier.height(16.dp))
-                    Text("To / Received By", style = MaterialTheme.typography.labelMedium, color = Color.Gray); Spacer(modifier = Modifier.height(8.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(allMembers.size) { i -> InputChip(selected = toId == allMembers[i].id, onClick = { toId = allMembers[i].id }, label = { Text(allMembers[i].name + if (!allMembers[i].active) " (Inactive)" else "") }, colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White)) } }; Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount ($currency)") }, modifier = Modifier.fillMaxWidth(), singleLine = true, colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = themeColor, focusedLabelColor = themeColor))
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = themeColor, focusedLabelColor = themeColor))
-                Spacer(modifier = Modifier.height(16.dp))
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(value = dateDisplay, onValueChange = {}, readOnly = true, label = { Text("Date") }, trailingIcon = { Icon(Icons.Default.CalendarToday, "") }, modifier = Modifier.fillMaxWidth(), enabled = false, colors = OutlinedTextFieldDefaults.colors(disabledTextColor = MaterialTheme.colorScheme.onSurface, disabledBorderColor = MaterialTheme.colorScheme.outline))
-                    Box(modifier = Modifier.matchParentSize().clickable { datePickerDialog.show() })
-                }
-
-                if (type == "debit" || type == "expense" || type == "distribute") {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    val excludeTitle = if (type == "distribute") "Exclude (Who won't receive this split?)" else "Exclude (Who didn't pay?)"
-                    Text(excludeTitle, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    activeMembers.chunked(2).forEach { row ->
-                        Row(modifier = Modifier.fillMaxWidth()) {
-                            row.forEach { person ->
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).clickable { excludedIds = if (excludedIds.contains(person.id)) excludedIds - person.id else excludedIds + person.id }) {
-                                    Checkbox(checked = excludedIds.contains(person.id), onCheckedChange = null, colors = CheckboxDefaults.colors(checkedColor = Color.Red))
-                                    Text(person.name, style = MaterialTheme.typography.bodyMedium)
-                                }
-                            }
-                            if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        item {
+                            val col = Color(0xFF8B5CF6)
+                            FilterChip(
+                                selected = type == "distribute",
+                                onClick = { type = "distribute"; selectedId = "All"; excludedIds = emptySet() },
+                                label = { Text("Distribute", fontWeight = if (type == "distribute") FontWeight.Bold else FontWeight.Normal) },
+                                leadingIcon = if (type == "distribute") { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = col.copy(alpha = 0.2f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                        item {
+                            val col = Color(0xFF059669)
+                            FilterChip(
+                                selected = type == "settlement",
+                                onClick = { type = "settlement"; fromId = ""; toId = "" },
+                                label = { Text("Settlement", fontWeight = if (type == "settlement") FontWeight.Bold else FontWeight.Normal) },
+                                leadingIcon = if (type == "settlement") { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = col.copy(alpha = 0.2f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
+                        }
+                        item {
+                            val col = Color(0xFF2563EB)
+                            FilterChip(
+                                selected = type == "transfer",
+                                onClick = { type = "transfer"; fromId = ""; toId = "" },
+                                label = { Text("Transfer", fontWeight = if (type == "transfer") FontWeight.Bold else FontWeight.Normal) },
+                                leadingIcon = if (type == "transfer") { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = col.copy(alpha = 0.2f),
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(32.dp))
+                // Main Details Card
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Amount Hero Input
+                        OutlinedTextField(
+                            value = amount,
+                            onValueChange = { amount = it },
+                            label = { Text("Amount ($currency)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = themeColor, focusedLabelColor = themeColor)
+                        )
+
+                        // Subject Selection
+                        if (type == "debit" || type == "credit") {
+                            Text(
+                                if (type == "credit") "Payer / Member" else "Bill Category",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (type == "credit") {
+                                LazyRow(state = creditMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(allMembers.size) { i ->
+                                        val m = allMembers[i]
+                                        val isSelected = selectedId == m.id
+                                        InputChip(
+                                            selected = isSelected,
+                                            onClick = { selectedId = m.id },
+                                            label = { Text(m.name + if (!m.active) " (Inactive)" else "", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                            leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                            colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White)
+                                        )
+                                    }
+                                }
+                            } else {
+                                LazyRow(state = debitBillTypesState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    items(activeBillTypes.size) { i ->
+                                        val b = activeBillTypes[i]
+                                        val isSelected = selectedId == b.id
+                                        InputChip(
+                                            selected = isSelected,
+                                            onClick = { selectedId = b.id },
+                                            label = { Text("${b.icon} ${b.name}", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                            leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                            colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (type == "expense") {
+                            Text("Paid By", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            LazyRow(state = expenseFromMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(allMembers.size) { i ->
+                                    val m = allMembers[i]
+                                    val isSelected = fromId == m.id
+                                    InputChip(
+                                        selected = isSelected,
+                                        onClick = { fromId = m.id },
+                                        label = { Text(m.name + if (!m.active) " (Inactive)" else "", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                        leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                        colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White)
+                                    )
+                                }
+                            }
+
+                            Text("For Bill Category", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            LazyRow(state = expenseToBillTypesState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(activeBillTypes.size) { i ->
+                                    val b = activeBillTypes[i]
+                                    val isSelected = toId == b.id
+                                    InputChip(
+                                        selected = isSelected,
+                                        onClick = { toId = b.id },
+                                        label = { Text("${b.icon} ${b.name}", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                        leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                        colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (type == "settlement" || type == "transfer") {
+                            Text("From / Sender", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            LazyRow(state = settleFromMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(allMembers.size) { i ->
+                                    val m = allMembers[i]
+                                    val isSelected = fromId == m.id
+                                    InputChip(
+                                        selected = isSelected,
+                                        onClick = { fromId = m.id },
+                                        label = { Text(m.name + if (!m.active) " (Inactive)" else "", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                        leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                        colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White)
+                                    )
+                                }
+                            }
+
+                            Text("To / Receiver", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            LazyRow(state = settleToMembersState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(allMembers.size) { i ->
+                                    val m = allMembers[i]
+                                    val isSelected = toId == m.id
+                                    InputChip(
+                                        selected = isSelected,
+                                        onClick = { toId = m.id },
+                                        label = { Text(m.name + if (!m.active) " (Inactive)" else "", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                        leadingIcon = if (isSelected) { { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) } } else null,
+                                        colors = InputChipDefaults.inputChipColors(selectedContainerColor = themeColor, selectedLabelColor = Color.White, selectedLeadingIconColor = Color.White)
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = note,
+                            onValueChange = { note = it },
+                            label = { Text("Note / Description") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = themeColor, focusedLabelColor = themeColor)
+                        )
+
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = dateDisplay,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Transaction Date & Time") },
+                                trailingIcon = { Icon(Icons.Default.CalendarToday, "") },
+                                modifier = Modifier.fillMaxWidth(),
+                                enabled = false,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = OutlinedTextFieldDefaults.colors(disabledTextColor = MaterialTheme.colorScheme.onSurface, disabledBorderColor = MaterialTheme.colorScheme.outline)
+                            )
+                            Box(modifier = Modifier.matchParentSize().clickable { datePickerDialog.show() })
+                        }
+                    }
+                }
+
+                // Member Split Exclusion Card
+                if (type == "debit" || type == "expense" || type == "distribute") {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                if (type == "distribute") "Split Exclusion List" else "Member Split Exclusions",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Check members who should be EXCLUDED from this transaction split:",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            activeMembers.chunked(2).forEach { row ->
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    row.forEach { person ->
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f).clickable {
+                                                excludedIds = if (excludedIds.contains(person.id)) excludedIds - person.id else excludedIds + person.id
+                                            }
+                                        ) {
+                                            Checkbox(
+                                                checked = excludedIds.contains(person.id),
+                                                onCheckedChange = null,
+                                                colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.error)
+                                            )
+                                            Text(person.name, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                    }
+                                    if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+
+                            val includedCount = activeMembers.size - excludedIds.size
+                            val amt = amount.toDoubleOrNull() ?: 0.0
+                            if (includedCount > 0 && amt > 0) {
+                                val share = amt / includedCount
+                                Surface(
+                                    color = themeColor.copy(alpha = 0.1f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Per-person share ($includedCount people):", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                        Text("${FormatUtils.formatAmount(share)} $currency", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = themeColor)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 val isValid = when(type) {
                     "expense" -> amount.isNotEmpty() && fromId.isNotEmpty() && toId.isNotEmpty()
                     "debit", "credit" -> amount.isNotEmpty() && selectedId.isNotEmpty()
@@ -280,9 +618,20 @@ fun AddTransactionScreen(
                     "settlement", "transfer" -> amount.isNotEmpty() && fromId.isNotEmpty() && toId.isNotEmpty() && fromId != toId
                     else -> false
                 }
-                Button(onClick = { showConfirmation = true }, modifier = Modifier.fillMaxWidth().height(50.dp), enabled = isValid, colors = ButtonDefaults.buttonColors(containerColor = themeColor)) { Text(if(transactionIdToEdit != null) "Update" else "Save", fontSize = 16.sp, fontWeight = FontWeight.Bold) }
-                Spacer(modifier = Modifier.height(32.dp))
+
+                Button(
+                    onClick = { showConfirmation = true },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    enabled = isValid,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = themeColor)
+                ) {
+                    Text(if(transactionIdToEdit != null) "Update Transaction" else "Save Transaction", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
+

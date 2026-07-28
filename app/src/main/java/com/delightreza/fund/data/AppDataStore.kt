@@ -24,6 +24,17 @@ class AppDataStore(private val context: Context) {
         val PENDING_DATA_SYNC = androidx.datastore.preferences.core.booleanPreferencesKey("pending_data_sync")
         val PENDING_CONFIG_SYNC = androidx.datastore.preferences.core.booleanPreferencesKey("pending_config_sync")
         val PENDING_COMMIT_MSG = stringPreferencesKey("pending_commit_msg")
+        val DARK_MODE = stringPreferencesKey("dark_mode_preference")
+    }
+
+    val darkModeFlow: Flow<String> = context.dataStore.data.map { preferences ->
+        preferences[DARK_MODE] ?: "system"
+    }
+
+    suspend fun setDarkMode(mode: String) {
+        context.dataStore.edit { preferences ->
+            preferences[DARK_MODE] = mode
+        }
     }
 
     val pendingSyncFlow: Flow<Boolean> = context.dataStore.data.map { 

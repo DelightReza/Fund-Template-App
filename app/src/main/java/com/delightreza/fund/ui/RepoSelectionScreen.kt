@@ -65,86 +65,97 @@ fun RepoSelectionScreen(
         }
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(64.dp)
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        Text("Your Funds", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-        Text("Select a workspace to manage expenses", color = Color.Gray, fontSize = 14.sp)
-        Spacer(modifier = Modifier.height(32.dp))
-
-        if (savedRepos.isNotEmpty()) {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
-                items(savedRepos.toList()) { entry ->
-                    val (title, url) = parseRepoEntry(entry)
-                    SavedRepoItem(title = title, url = url, onClick = { urlInput = url; attemptConnection() },
-                        onDelete = { scope.launch { repository.removeSavedRepo(url) } })
-                }
-            }
             Spacer(modifier = Modifier.height(24.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Add New Fund", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 12.dp))
-                
-                OutlinedTextField(
-                    value = urlInput, onValueChange = { urlInput = it },
-                    label = { Text("Repo URL or owner/repo") }, 
-                    placeholder = { Text("delightreza/Kharcha") },
-                    modifier = Modifier.fillMaxWidth(), singleLine = true, isError = errorMsg != null,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                
-                if (showTokenInput) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    OutlinedTextField(
-                        value = tokenInput, onValueChange = { tokenInput = it },
-                        label = { Text("GitHub Token (Optional)") },
-                        placeholder = { Text("ghp_...") },
-                        modifier = Modifier.fillMaxWidth(), singleLine = true,
-                        visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                        keyboardActions = KeyboardActions(onGo = { attemptConnection() }),
-                        trailingIcon = {
-                            IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
-                                Icon(if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Toggle visibility")
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp)
+            
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(64.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.AccountBalanceWallet,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(32.dp)
                     )
                 }
-                
-                if (errorMsg != null) {
-                    Text(errorMsg!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Your Funds", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Text("Select a workspace to manage expenses", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(32.dp))
+
+            if (savedRepos.isNotEmpty()) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().weight(1f, fill = false)) {
+                    items(savedRepos.toList()) { entry ->
+                        val (title, url) = parseRepoEntry(entry)
+                        SavedRepoItem(title = title, url = url, onClick = { urlInput = url; attemptConnection() },
+                            onDelete = { scope.launch { repository.removeSavedRepo(url) } })
+                    }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Button(onClick = { attemptConnection() }, enabled = !isLoading, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
-                    if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
-                    else Text("Connect Fund")
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Add New Fund", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(bottom = 12.dp))
+                    
+                    OutlinedTextField(
+                        value = urlInput, onValueChange = { urlInput = it },
+                        label = { Text("Repo URL or owner/repo") }, 
+                        placeholder = { Text("owner/repo") },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true, isError = errorMsg != null,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    
+                    if (showTokenInput) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        OutlinedTextField(
+                            value = tokenInput, onValueChange = { tokenInput = it },
+                            label = { Text("GitHub Token (Optional)") },
+                            placeholder = { Text("ghp_...") },
+                            modifier = Modifier.fillMaxWidth(), singleLine = true,
+                            visualTransformation = if (isTokenVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { attemptConnection() }),
+                            trailingIcon = {
+                                IconButton(onClick = { isTokenVisible = !isTokenVisible }) {
+                                    Icon(if (isTokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, "Toggle visibility")
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+                    
+                    if (errorMsg != null) {
+                        Text(errorMsg!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Button(onClick = { attemptConnection() }, enabled = !isLoading, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)) {
+                        if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        else Text("Connect Fund")
+                    }
                 }
             }
         }
@@ -172,14 +183,15 @@ fun SavedRepoItem(title: String, url: String, onClick: () -> Unit, onDelete: () 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
         shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = Modifier.fillMaxWidth().clickable { onClick() }
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text(url, style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 1)
+                Text(url, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Remove", tint = Color.Gray) }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, "Remove", tint = MaterialTheme.colorScheme.error) }
         }
     }
 }

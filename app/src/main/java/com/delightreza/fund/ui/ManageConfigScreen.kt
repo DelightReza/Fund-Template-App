@@ -206,19 +206,19 @@ fun ManageConfigScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(member.name, fontWeight = FontWeight.SemiBold)
                                     Surface(
-                                        color = if (member.active) Color(0xFFDCFCE7) else Color(0xFFFEE2E2),
+                                        color = if (member.active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
                                         Text(
                                             text = if (member.active) "Active" else "Inactive",
-                                            color = if (member.active) Color(0xFF15803D) else Color(0xFFB91C1C),
+                                            color = if (member.active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer,
                                             fontSize = 10.sp,
                                             fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                         )
                                     }
                                 }
-                                Text("ID: ${member.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text("ID: ${member.id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -329,7 +329,7 @@ fun ManageConfigScreen(
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
                                 Text("${billType.icon} ${billType.name}", fontWeight = FontWeight.SemiBold)
-                                Text("ID: ${billType.id}", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                Text("ID: ${billType.id}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         IconButton(onClick = { billTypeToRemove = billType }, enabled = !isSaving) {
