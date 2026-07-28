@@ -54,7 +54,8 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 fun HomeScreen(
     modifier: Modifier = Modifier, 
     repository: Repository,
-    navController: NavController
+    navController: NavController,
+    onOpenProfile: (String) -> Unit = {}
 ) {
     var data by remember { mutableStateOf<FundData?>(null) }
     var config by remember { mutableStateOf<AppConfig?>(null) }
@@ -69,6 +70,7 @@ fun HomeScreen(
     var dateFrom by remember { mutableStateOf("") }
     var dateTo by remember { mutableStateOf("") }
     var showFilters by remember { mutableStateOf(false) }
+    var selectedMemberDetailId by remember { mutableStateOf<String?>(null) }
     
     val scope = rememberCoroutineScope()
     val hasPendingSync by repository.pendingSyncFlow.collectAsState(initial = false)
@@ -444,7 +446,7 @@ fun HomeScreen(
                     if (expensesByCategory.isNotEmpty()) {
                         item {
                             Text(
-                                "Top Bill Breakdown",
+                                "Bill Breakdown",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onBackground
@@ -455,10 +457,17 @@ fun HomeScreen(
                                 contentPadding = PaddingValues(end = 8.dp)
                             ) {
                                 items(expensesByCategory) { (billType, amount) ->
+                                    val isSelected = filterCategory == "bill_${billType.id}"
                                     Surface(
                                         shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.surface,
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                        border = androidx.compose.foundation.BorderStroke(
+                                            if (isSelected) 2.dp else 1.dp,
+                                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                        ),
+                                        onClick = {
+                                            filterCategory = if (isSelected) "all" else "bill_${billType.id}"
+                                        }
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -469,13 +478,13 @@ fun HomeScreen(
                                                 modifier = Modifier
                                                     .size(32.dp)
                                                     .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.primaryContainer),
+                                                    .background(if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Icon(
                                                     Icons.Outlined.Receipt,
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                             }
@@ -483,13 +492,14 @@ fun HomeScreen(
                                                 Text(
                                                     billType.name,
                                                     style = MaterialTheme.typography.labelLarge,
-                                                    fontWeight = FontWeight.SemiBold
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                                 )
                                                 Text(
                                                     "${FormatUtils.formatAmount(amount)} $currency",
                                                     style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.primary
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary
                                                 )
                                             }
                                         }
@@ -522,7 +532,14 @@ fun HomeScreen(
                             rowItems.forEach { (id, net) ->
                                 val name = resolveName(id)
                                 val given = data!!.transactions.filter { it.type == "credit" && (it.payerId == id || it.whoOrBill == id) }.sumOf { it.amount }
-                                RedesignedMemberCard(name, net, given, Modifier.weight(1f).fillMaxHeight(), currency)
+                                RedesignedMemberCard(
+                                    name = name,
+                                    net = net,
+                                    given = given,
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                    currency = currency,
+                                    onClick = { selectedMemberDetailId = id }
+                                )
                             }
                             if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
                         }
@@ -549,17 +566,36 @@ fun HomeScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            IconButton(
-                                onClick = { showFilters = !showFilters },
-                                colors = IconButtonDefaults.iconButtonColors(
-                                    containerColor = if (showFilters) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(
-                                    if (showFilters) Icons.Default.FilterListOff else Icons.Default.FilterList,
-                                    "Toggle Filters",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                                if (filterCategory != "all" || searchQuery.isNotEmpty() || dateFrom.isNotEmpty() || dateTo.isNotEmpty()) {
+                                    AssistChip(
+                                        onClick = {
+                                            filterCategory = "all"
+                                            searchQuery = ""
+                                            dateFrom = ""
+                                            dateTo = ""
+                                        },
+                                        label = { Text("Clear Filter", style = MaterialTheme.typography.labelSmall) },
+                                        trailingIcon = {
+                                            Icon(Icons.Default.Close, contentDescription = "Clear Filter", modifier = Modifier.size(14.dp))
+                                        }
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { showFilters = !showFilters },
+                                    colors = IconButtonDefaults.iconButtonColors(
+                                        containerColor = if (showFilters) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                    )
+                                ) {
+                                    Icon(
+                                        if (showFilters) Icons.Default.FilterListOff else Icons.Default.FilterList,
+                                        "Toggle Filters",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                             }
                         }
 
@@ -734,18 +770,46 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                if (selectedMemberDetailId != null) {
+                    MemberDetailSheet(
+                        memberId = selectedMemberDetailId!!,
+                        config = config!!,
+                        data = data!!,
+                        balances = balances,
+                        currency = currency,
+                        onDismiss = { selectedMemberDetailId = null },
+                        onOpenProfile = onOpenProfile,
+                        onFilterByMember = { mId ->
+                            filterCategory = "person_$mId"
+                            showFilters = true
+                        },
+                        onTransactionClick = { txId ->
+                            navController.navigate("detail/$txId")
+                        }
+                    )
+                }
             }
+
             PullToRefreshContainer(state = ptrState, modifier = Modifier.align(Alignment.TopCenter))
         }
 }
 
 @Composable
-fun RedesignedTransactionRow(tx: Transaction, displayTitle: String, currency: String, onClick: () -> Unit) {
+fun RedesignedTransactionRow(
+    tx: Transaction, 
+    displayTitle: String, 
+    currency: String, 
+    overrideAmount: Double? = null,
+    onClick: () -> Unit
+) {
     val localDate = DateUtils.formatToLocalDateOnly(tx.date)
     val isIncome = tx.type == "credit"
     val badgeBg = if (isIncome) Color(0xFFD1FAE5) else Color(0xFFFFE4E6)
     val badgeIconColor = if (isIncome) Color(0xFF059669) else Color(0xFFE11D48)
     val icon = if (isIncome) Icons.Outlined.ArrowDownward else Icons.Outlined.ArrowUpward
+
+    val displayedAmt = overrideAmount ?: tx.amount
 
     Card(
         modifier = Modifier
@@ -792,24 +856,33 @@ fun RedesignedTransactionRow(tx: Transaction, displayTitle: String, currency: St
             }
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    text = "${if (isIncome) "+" else "-"}${FormatUtils.formatAmount(tx.amount)} $currency",
+                    text = "${if (isIncome) "+" else "-"}${FormatUtils.formatAmount(displayedAmt)} $currency",
                     color = badgeIconColor,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Icon(
-                    Icons.Default.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp)
-                )
+                if (overrideAmount != null && overrideAmount != tx.amount) {
+                    Text(
+                        text = "Share (${FormatUtils.formatAmount(tx.amount)} total)",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-fun RedesignedMemberCard(name: String, net: Double, given: Double, modifier: Modifier, currency: String) {
+fun RedesignedMemberCard(
+    name: String, 
+    net: Double, 
+    given: Double, 
+    modifier: Modifier, 
+    currency: String,
+    onClick: () -> Unit = {}
+) {
     val isPositive = net >= 0
     val netBgColor = if (isPositive) Color(0xFFD1FAE5) else Color(0xFFFFE4E6)
     val netTextColor = if (isPositive) Color(0xFF059669) else Color(0xFFE11D48)
@@ -818,7 +891,7 @@ fun RedesignedMemberCard(name: String, net: Double, given: Double, modifier: Mod
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = modifier
+        modifier = modifier.clickable { onClick() }
     ) {
         Column(
             modifier = Modifier.padding(14.dp).fillMaxSize(),
@@ -878,17 +951,345 @@ fun RedesignedMemberCard(name: String, net: Double, given: Double, modifier: Mod
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Column {
+                    Text(
+                        text = "Given:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "${FormatUtils.formatAmount(given)} $currency",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "View Member Details",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MemberDetailSheet(
+    memberId: String,
+    config: AppConfig,
+    data: FundData,
+    balances: Map<String, Double>,
+    currency: String,
+    onDismiss: () -> Unit,
+    onOpenProfile: (String) -> Unit = {},
+    onFilterByMember: (String) -> Unit,
+    onTransactionClick: (String) -> Unit
+) {
+    val member = config.members.find { it.id == memberId } ?: return
+    val net = balances[memberId] ?: 0.0
+    val resolveName = { id: String -> config.members.find { it.id == id }?.name ?: id }
+    val resolveBillName = { id: String -> config.billTypes.find { it.id == id }?.name ?: id }
+
+    val memberCredits = data.transactions.filter { it.type == "credit" && (it.payerId == memberId || it.whoOrBill == memberId) }
+    val totalGiven = memberCredits.sumOf { it.amount }
+
+    val memberExpenses = data.transactions.filter { tx ->
+        if (tx.type == "credit") false
+        else if (!tx.splitAmong.isNullOrEmpty()) tx.splitAmong.contains(memberId)
+        else (tx.exemptions == null || !tx.exemptions.contains(memberId))
+    }
+    val totalExpensesPaid = memberExpenses.sumOf { tx ->
+        val payers = if (!tx.splitAmong.isNullOrEmpty()) tx.splitAmong else {
+            val exemptions = tx.exemptions ?: emptyList()
+            config.members.map { it.id }.filter { !exemptions.contains(it) }
+        }
+        if (payers.isNotEmpty()) tx.amount / payers.size else 0.0
+    }
+
+    val memberSettlements = data.transactions.filter { tx ->
+        (tx.type == "settlement" || tx.type == "transfer") && (tx.payerId == memberId || tx.whoOrBill == memberId)
+    }
+    val totalSettlements = memberSettlements.sumOf { it.amount }
+
+    val allMemberTransactions = data.transactions.filter { tx ->
+        (tx.payerId == memberId || tx.whoOrBill == memberId) ||
+        (!tx.splitAmong.isNullOrEmpty() && tx.splitAmong.contains(memberId)) ||
+        (tx.type != "credit" && (tx.exemptions == null || !tx.exemptions.contains(memberId)))
+    }.sortedByDescending { it.date }
+
+    val isPositive = net >= 0
+    val netBgColor = if (isPositive) Color(0xFFD1FAE5) else Color(0xFFFFE4E6)
+    val netTextColor = if (isPositive) Color(0xFF059669) else Color(0xFFE11D48)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = member.name.take(1),
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            fontSize = 20.sp
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = member.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (member.active) Color(0xFF10B981) else Color(0xFF6B7280))
+                            )
+                            Text(
+                                text = if (member.active) "Active Member" else "Inactive Member",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            // Balance Summary Hero Card
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Net Balance Position",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "${if (isPositive) "+" else ""}${FormatUtils.formatAmount(net)} $currency",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = netTextColor
+                        )
+                        Text(
+                            text = when {
+                                net > 0 -> "In Credit (Paid excess to fund)"
+                                net < 0 -> "In Debt (Owes to fund)"
+                                else -> "Settled (Balanced)"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Surface(
+                        color = netBgColor,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (isPositive) "CREDIT" else "OWED",
+                            color = netTextColor,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+
+            // Stats breakdown row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Given / Contributed
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("Contributed", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "${FormatUtils.formatAmount(totalGiven)} $currency",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                // Expenses Paid
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("Expenses Paid", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "${FormatUtils.formatAmount(totalExpensesPaid)} $currency",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
+
+                // Settlements
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text("Settlements", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "${FormatUtils.formatAmount(totalSettlements)} $currency",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.tertiary
+                        )
+                    }
+                }
+            }
+
+            // Quick Actions
+            Button(
+                onClick = {
+                    onDismiss()
+                    onOpenProfile(memberId)
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("View ${member.name}'s Profile", fontWeight = FontWeight.Bold)
+            }
+
+            // Transaction History Header
+            Text(
+                "Activity History (${allMemberTransactions.size})",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+
+            if (allMemberTransactions.isEmpty()) {
                 Text(
-                    text = "Given:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "No transactions recorded for this member.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 12.dp)
                 )
-                Text(
-                    text = "${FormatUtils.formatAmount(given)} $currency",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 260.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(allMemberTransactions) { tx ->
+                        val targetName = when {
+                            tx.type == "credit" -> resolveName(tx.payerId ?: tx.whoOrBill)
+                            tx.type == "debit" || tx.type == "expense" -> {
+                                val bid = tx.billTypeId ?: tx.whoOrBill
+                                val billName = resolveBillName(bid)
+                                if (billName.equals("Other", ignoreCase = true) && tx.note.isNotEmpty()) tx.note else billName
+                            }
+                            tx.type == "settlement" || tx.type == "transfer" -> {
+                                val target = resolveName(tx.payerId ?: tx.whoOrBill)
+                                if (tx.note.isNotEmpty()) "${tx.note} ($target)" else target
+                            }
+                            else -> tx.note.ifEmpty { tx.type.replaceFirstChar { it.uppercase() } }
+                        }
+
+                        val memberShare = when (tx.type) {
+                            "credit", "settlement", "transfer" -> tx.amount
+                            else -> {
+                                val payers = if (!tx.splitAmong.isNullOrEmpty()) tx.splitAmong else {
+                                    val exemptions = tx.exemptions ?: emptyList()
+                                    config.members.map { it.id }.filter { !exemptions.contains(it) }
+                                }
+                                val count = if (payers.isNotEmpty()) payers.size else config.members.size
+                                tx.amount / count
+                            }
+                        }
+
+                        RedesignedTransactionRow(
+                            tx = tx,
+                            displayTitle = targetName,
+                            currency = currency,
+                            overrideAmount = memberShare,
+                            onClick = {
+                                onDismiss()
+                                onTransactionClick(tx.id)
+                            }
+                        )
+                    }
+                }
             }
         }
     }

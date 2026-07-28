@@ -34,6 +34,7 @@ fun MainScreen(
     onSwitchRepo: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(0) }
+    var profileViewUser by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -86,7 +87,10 @@ fun MainScreen(
                     },
                     label = { Text("Profile", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal) },
                     selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
+                    onClick = { 
+                        profileViewUser = null
+                        selectedTab = 2 
+                    },
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
@@ -101,7 +105,11 @@ fun MainScreen(
                 HomeScreen(
                     modifier = Modifier.padding(padding),
                     repository = repository,
-                    navController = rootNavController
+                    navController = rootNavController,
+                    onOpenProfile = { memberId ->
+                        profileViewUser = memberId
+                        selectedTab = 2
+                    }
                 )
             }
             1 -> {
@@ -117,7 +125,7 @@ fun MainScreen(
                     modifier = Modifier.padding(padding),
                     repository = repository,
                     dataStore = dataStore,
-                    currentUser = currentUser,
+                    currentUser = profileViewUser ?: currentUser,
                     navController = rootNavController,
                     onLogout = {
                         scope.launch {
