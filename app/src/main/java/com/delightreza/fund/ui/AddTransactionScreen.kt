@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,12 +58,12 @@ fun AddTransactionScreen(
     var isLoadingData by remember { mutableStateOf(true) }
     var showConfirmation by remember { mutableStateOf(false) }
     
-    var type by remember { mutableStateOf(defaultType ?: "debit") }
-    var amount by remember { mutableStateOf("") }
-    var selectedId by remember { mutableStateOf("") } 
-    var fromId by remember { mutableStateOf("") }
-    var toId by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var type by rememberSaveable { mutableStateOf(defaultType ?: "debit") }
+    var amount by rememberSaveable { mutableStateOf("") }
+    var selectedId by rememberSaveable { mutableStateOf("") } 
+    var fromId by rememberSaveable { mutableStateOf("") }
+    var toId by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
     var excludedIds by remember { mutableStateOf(setOf<String>()) }
     var selectedDateTime by remember { mutableStateOf<Calendar?>(null) }
     

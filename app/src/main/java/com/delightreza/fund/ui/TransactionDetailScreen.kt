@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,9 +46,9 @@ fun TransactionDetailScreen(
     var groupTransactions by remember { mutableStateOf<List<Transaction>>(emptyList()) }
     var config by remember { mutableStateOf<AppConfig?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
-    var deleteReason by remember { mutableStateOf("") }
-    var isDeleting by remember { mutableStateOf(false) }
+    var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var deleteReason by rememberSaveable { mutableStateOf("") }
+    var isDeleting by rememberSaveable { mutableStateOf(false) }
     
     var balanceBefore by remember { mutableStateOf<Double?>(null) }
     var balanceAfter by remember { mutableStateOf<Double?>(null) }

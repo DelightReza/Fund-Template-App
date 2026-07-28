@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,15 +63,15 @@ fun HomeScreen(
     var balances by remember { mutableStateOf<Map<String, Double>>(emptyMap()) }
     var isRefreshing by remember { mutableStateOf(false) }
     var isInitialLoad by remember { mutableStateOf(true) }
-    var displayedCount by remember { mutableIntStateOf(20) }
+    var displayedCount by rememberSaveable { mutableIntStateOf(20) }
     
     // Filters State
-    var searchQuery by remember { mutableStateOf("") }
-    var filterCategory by remember { mutableStateOf("all") }
-    var dateFrom by remember { mutableStateOf("") }
-    var dateTo by remember { mutableStateOf("") }
-    var showFilters by remember { mutableStateOf(false) }
-    var selectedMemberDetailId by remember { mutableStateOf<String?>(null) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var filterCategory by rememberSaveable { mutableStateOf("all") }
+    var dateFrom by rememberSaveable { mutableStateOf("") }
+    var dateTo by rememberSaveable { mutableStateOf("") }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var selectedMemberDetailId by rememberSaveable { mutableStateOf<String?>(null) }
     
     val scope = rememberCoroutineScope()
     val hasPendingSync by repository.pendingSyncFlow.collectAsState(initial = false)
@@ -930,16 +931,18 @@ fun RedesignedMemberCard(
                     )
                 }
 
-                Surface(
-                    color = netBgColor,
-                    shape = RoundedCornerShape(12.dp)
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "${if (isPositive) "+" else ""}${FormatUtils.formatAmount(net)}",
-                        color = netTextColor,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "View Member Details",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -949,7 +952,7 @@ fun RedesignedMemberCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom
             ) {
                 Column {
                     Text(
@@ -965,18 +968,16 @@ fun RedesignedMemberCard(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    color = netBgColor,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "View Member Details",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(16.dp)
+                    Text(
+                        text = "${if (isPositive) "+" else ""}${FormatUtils.formatAmount(net)}",
+                        color = netTextColor,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
             }
